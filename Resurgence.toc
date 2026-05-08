@@ -1,0 +1,9 @@
+## Interface: 120005
+## Title: Resurgence
+## Notes: WeakAuras-style proc and cooldown tracker, rebuilt for the 12.0.x era. The ones that work.
+## Version: 0.1.0-alpha
+## Author: AxelRodd
+## SavedVariables: ResurgenceDB
+
+AuraDB.lua
+Resurgence.lua

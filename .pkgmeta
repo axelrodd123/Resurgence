@@ -1,0 +1,15 @@
+package-as: Resurgence
+
+license-output: LICENSE.txt
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .github
+  - .gitignore
+  - screenshots
+  - README.md
+  - icon.png
+  - releases
