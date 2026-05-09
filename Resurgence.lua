@@ -837,8 +837,8 @@ local function buildSettingsContent(parent)
     visSub:SetJustifyH("LEFT")
 
     local row1 = addToggleRow(visSub, -12,
-        "Clean Mode",
-        "Hides Blizzard's quest tracker, default buffs, talking head, zone banners, micro menu, default XP bar, minimap clutter. Action bars and unit frames stay so you can still play.",
+        "Clean Mode (aggressive)",
+        "Hides everything Blizzard : quest tracker, default unit frames, action bars (faded but keybinds still cast), minimap, default buffs, cast bar, boss frames, raid frames, talking head, banners, default XP bar. Toggle off to bring everything back.",
         function() return ResurgenceDB.cleanMode end,
         function(v) applyCleanMode(v) end,
         C.gold)
@@ -1388,37 +1388,89 @@ local function hideXpBar()
 end
 
 ----------------------------------------------------------------------
--- CLEAN MODE (hide Blizzard clutter so Resurgence's footprint is visible)
+-- CLEAN MODE (aggressive : hide every Blizzard visible UI element so
+-- Resurgence's footprint is the only thing on screen).
+--
+-- Two tiers because secure action-bar and unit frames cannot just be
+-- :Hide()'d during combat without taint risk. We use SetAlpha(0) +
+-- EnableMouse(false) for those (keybinds still work, click-cast doesn't).
 ----------------------------------------------------------------------
-local CLEAN_TARGETS = {
-    "ObjectiveTrackerFrame",
-    "BuffFrame",
-    "DebuffFrame",
-    "TalkingHeadFrame",
-    "ZoneTextFrame",
-    "SubZoneTextFrame",
-    "PVPArenaTextFrame",
-    "StatusTrackingBarManager",
-    "TimeManagerClockButton",
-    "MinimapZoneTextButton",
-    "MinimapNorthTag",
-    "MicroMenuContainer",
+local CLEAN_HIDE_TARGETS = {
+    -- Quest / Objective / Banners
+    "ObjectiveTrackerFrame", "TalkingHeadFrame",
+    "ZoneTextFrame", "SubZoneTextFrame", "PVPArenaTextFrame",
+    -- Default buff / debuff display
+    "BuffFrame", "DebuffFrame",
+    -- Bottom XP / reputation tracking
+    "StatusTrackingBarManager", "MainStatusTrackingBarContainer",
+    "SecondaryStatusTrackingBarContainer",
+    -- Minimap (whole cluster)
+    "TimeManagerClockButton", "MinimapZoneTextButton", "MinimapNorthTag",
+    "MinimapCluster", "Minimap", "MinimapBackdrop",
+    "MiniMapTracking", "MiniMapTrackingButton",
+    "MiniMapMailFrame", "GameTimeFrame",
+    -- Micro menu and bag bar
+    "MicroMenuContainer", "MicroButtonAndBagsBar", "BagsBar",
+    "MainMenuBarBackpackButton",
+    "CharacterBag0Slot", "CharacterBag1Slot",
+    "CharacterBag2Slot", "CharacterBag3Slot",
+    -- Default unit frames
+    "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame",
+    "TargetFrameToT", "ComboFrame",
+    "PartyFrame", "CompactPartyFrame",
+    "CompactRaidFrameManager", "CompactRaidFrameContainer",
+    "ArenaEnemyFrames", "ArenaPrepFrames",
+    -- Boss frames
+    "BossTargetFrameContainer",
+    -- Cast bars
+    "CastingBarFrame", "PlayerCastingBarFrame",
+    -- Achievement / loot popups
+    "AlertFrameSubSystem", "GroupLootContainer", "AlertFrame",
+    -- Quick join toast
+    "QuickJoinToastButton",
+    -- Vehicle seat indicator
+    "VehicleSeatIndicator",
+    -- Chat frame and all its children (we'll do our own messaging eventually)
+    "ChatFrame1", "ChatFrame2", "ChatFrame3", "ChatFrame4", "ChatFrame5",
+    "ChatFrame6", "ChatFrame7", "ChatFrame8", "ChatFrame9", "ChatFrame10",
+    "ChatFrame1Tab", "ChatFrame2Tab", "ChatFrame3Tab", "ChatFrame4Tab",
+    "ChatFrame1ButtonFrame", "ChatFrame2ButtonFrame",
+    "ChatFrameMenuButton", "ChatFrameChannelButton",
+    "ChatFrameToggleVoiceDeafenButton", "ChatFrameToggleVoiceMuteButton",
+    "GeneralDockManager", "ChatFrame1EditBox",
+    "QuickJoinRoleSelectionFrame",
+    -- World map button + tooltip clutter
+    "MicroMenuContainer", "WorldMapFrame",
+    -- Top right minor stuff
+    "ZoneAbilityFrame", "ExtraActionBarFrame",
+    -- Global FX glow on edge
+    "PlayerPowerBarAlt", "AlternatePowerBar",
 }
+
+-- Action-bar style frames : can't safely :Hide() during combat, but we can
+-- make them invisible + non-clickable. Keybinds still cast.
+local CLEAN_FADE_TARGETS = {
+    "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight",
+    "MultiBarLeft", "MultiBarRight", "MultiBar5", "MultiBar6", "MultiBar7",
+    "StanceBar", "PetActionBar", "PossessActionBar", "OverrideActionBar",
+    "ExtraActionBarFrame", "ZoneAbilityFrame",
+    "MainMenuBarArtFrame", "StatusTrackingBarManager",
+}
+
 local cleanOriginalShow = {}
+local cleanOriginalAlpha = {}
 
 local function applyCleanMode(on)
-    for _, name in ipairs(CLEAN_TARGETS) do
+    -- Hard hide list
+    for _, name in ipairs(CLEAN_HIDE_TARGETS) do
         local f = _G[name]
         if f then
             if on then
                 if not cleanOriginalShow[name] then
                     cleanOriginalShow[name] = f.Show
-                    f.Show = function() end -- neutralize Blizzard auto-show
+                    f.Show = function() end
                 end
-                if f.UnregisterAllEvents and f.RegisterEvent then
-                    -- only unregister for hideable, non-secure frames
-                    pcall(function() f:UnregisterAllEvents() end)
-                end
+                pcall(function() f:UnregisterAllEvents() end)
                 pcall(function() f:Hide() end)
             else
                 if cleanOriginalShow[name] then
@@ -1426,6 +1478,23 @@ local function applyCleanMode(on)
                     cleanOriginalShow[name] = nil
                 end
                 pcall(function() f:Show() end)
+            end
+        end
+    end
+    -- Fade list (action-bar style frames)
+    for _, name in ipairs(CLEAN_FADE_TARGETS) do
+        local f = _G[name]
+        if f then
+            if on then
+                if not cleanOriginalAlpha[name] then
+                    cleanOriginalAlpha[name] = f:GetAlpha()
+                end
+                pcall(function() f:SetAlpha(0) end)
+                pcall(function() f:EnableMouse(false) end)
+            else
+                pcall(function() f:SetAlpha(cleanOriginalAlpha[name] or 1) end)
+                pcall(function() f:EnableMouse(true) end)
+                cleanOriginalAlpha[name] = nil
             end
         end
     end
@@ -2270,6 +2339,14 @@ handler:SetScript("OnEvent", function(_, event, name)
             ResurgenceDB.xpBarPos = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
         end
     elseif event == "PLAYER_LOGIN" then
+        -- One-time migration : auto-enable Clean Mode for users upgrading
+        -- from < v0.5.2. The user explicitly asked for "everything Blizzard
+        -- gone" so we default it on, they can flip it off any time.
+        if not ResurgenceDB.cleanModeMigrated then
+            ResurgenceDB.cleanMode = true
+            ResurgenceDB.cleanModeMigrated = true
+        end
+
         buildLauncher()
         if ResurgenceDB.buffsHudOpen then
             C_Timer.After(0.5, function() showBuffsHUD() end)

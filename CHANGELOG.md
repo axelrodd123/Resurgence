@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2-alpha (2026-05-09)
+- Clean Mode is now full-nuke : the chat frames, the minimap entirely, the world map button, all bag slot icons, every Blizzard popup, every alert frame, and every remaining default UI element are now hidden. Only Resurgence UI elements remain on screen.
+- Auto-enable on upgrade : Clean Mode is forced ON one time for users coming from earlier versions. Toggle off in Settings any time.
+- Use this build to evaluate Resurgence's progress without Blizzard's UI biasing the visual.
+
+## 0.5.1-alpha (2026-05-09)
+- Clean Mode is now **aggressive** : hides 35+ Blizzard frames including unit frames, all action bars (faded to alpha 0, keybinds still cast), minimap entirely, boss frames, raid frames, cast bar, micro menu, bag bar, vehicle seat indicator, alert popups. Two-tier strategy : hard `:Hide()` for non-secure frames, `SetAlpha(0)` + `EnableMouse(false)` for secure action bars to avoid combat taint.
+- Toggle off any time to restore everything to default.
+
 ## 0.5.0-alpha (2026-05-09)
 - New : **Resurgence XP Bar** at the top of the screen. Custom gold gradient progress bar with the level, current XP / max, percentage, and a live time-to-ding estimate based on the XP rate over the last 30 minutes.
 - New : **Clean Mode**. One toggle hides Blizzard's quest tracker, default buffs and debuffs, talking head, zone enter banners, micro menu, default XP bar at the bottom, minimap zone label and clutter. Action bars and unit frames stay so you can still play. Toggle off anytime to bring everything back.
