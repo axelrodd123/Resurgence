@@ -1,8 +1,9 @@
 ## Interface: 120005
 ## Title: Resurgence
-## Notes: Premium awareness for the 12.0.x era. World Buffs module + UI shell. (proprietary, do not modify)
-## Version: 0.3.0-alpha
+## Notes: Premium awareness for the 12.0.x era. Aura engine + onboarding wizard. (proprietary, do not modify)
+## Version: 0.4.0-alpha
 ## Author: AxelRodd
 ## SavedVariables: ResurgenceDB
 
+AuraDB.lua
 Resurgence.lua

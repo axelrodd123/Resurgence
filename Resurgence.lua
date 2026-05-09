@@ -45,12 +45,19 @@ ResurgenceDB.lastTab        = ResurgenceDB.lastTab or "welcome"
 ResurgenceDB.buffsHudPos    = ResurgenceDB.buffsHudPos or { "TOPRIGHT", -260, -260 }
 ResurgenceDB.buffsHudOpen   = ResurgenceDB.buffsHudOpen or false
 ResurgenceDB.buffsHudLocked = ResurgenceDB.buffsHudLocked or false
+ResurgenceDB.setupDone      = ResurgenceDB.setupDone or false
+ResurgenceDB.preferences    = ResurgenceDB.preferences or { role = nil, content = {}, modules = {} }
+ResurgenceDB.aurasEnabled   = ResurgenceDB.aurasEnabled or {} -- aura.id -> true if enabled
+ResurgenceDB.aurasDisabled  = ResurgenceDB.aurasDisabled or {} -- aura.id -> true if explicitly disabled
+ResurgenceDB.aurasHudPos    = ResurgenceDB.aurasHudPos or { "CENTER", 0, -180 }
+ResurgenceDB.aurasHudLocked = ResurgenceDB.aurasHudLocked or false
 
 ----------------------------------------------------------------------
 -- Tab definitions
 ----------------------------------------------------------------------
 local TABS = {
     { id = "welcome",  label = "Welcome" },
+    { id = "auras",    label = "Auras" },
     { id = "buffs",    label = "World Buffs" },
     { id = "roadmap",  label = "Roadmap" },
     { id = "about",    label = "About" },
@@ -74,25 +81,25 @@ local ROADMAP = {
         },
     },
     {
-        ver = "0.3.0-alpha", status = "current",
+        ver = "0.3.0", status = "shipped",
         title = "World Buffs",
         body = "Live countdowns for every active world event in one floating window. One click takes you there with the in-game native 3D arrow that tilts up or down depending on the target's altitude.",
         items = {
             "Floating HUD with active events and live countdowns",
-            "Per-event Track button : sets a Blizzard waypoint, line on the map, 3D arrow that adapts in real time",
+            "Per-event Track button with native waypoint and 3D arrow",
             "Toggle from launcher menu, slash command, or in-app tab",
-            "Movable, lockable, position persisted",
         },
     },
     {
-        ver = "0.4.0", status = "planned",
-        title = "Aura Engine",
-        body = "Track the procs and buffs that actually matter to your spec, with the visual polish your gameplay deserves.",
+        ver = "0.4.0-alpha", status = "current",
+        title = "Aura Engine + Setup Wizard",
+        body = "The first real combat module. Curated procs and active buffs that matter to your spec, plus a guided onboarding that asks what you actually need and configures everything for you.",
         items = {
-            "Curated proc and buff library, hand-picked per spec",
-            "Glow border, cooldown sweep, countdown numbers",
-            "Per-aura toggle from Settings",
-            "Drag-and-drop layout, position persisted",
+            "39 hand-picked procs and active buffs across all 13 classes",
+            "Auto-filtered by your class and spec at login",
+            "Floating aura panel, draggable, position persisted",
+            "Multi-step onboarding wizard on first launch",
+            "Per-aura toggle from the Auras tab",
         },
     },
     {
@@ -969,10 +976,332 @@ local function buildBuffsContent(parent)
 end
 
 ----------------------------------------------------------------------
+-- AURA ENGINE
+-- Watches UNIT_AURA on the player. For every aura in Resurgence_AuraDB
+-- that matches the player's class (and is enabled), an icon appears in
+-- a floating panel while the buff is active.
+----------------------------------------------------------------------
+local function getPlayerClass()
+    local _, class = UnitClass("player")
+    return class
+end
+
+local function getActiveAuras()
+    local class = getPlayerClass()
+    local list = {}
+    if not Resurgence_AuraDB then return list end
+    for _, aura in ipairs(Resurgence_AuraDB) do
+        local classMatch = (aura.class == class) or (aura.class == "ALL")
+        local enabled = ResurgenceDB.aurasDisabled and not ResurgenceDB.aurasDisabled[aura.id]
+        if classMatch and enabled then
+            table.insert(list, aura)
+        end
+    end
+    table.sort(list, function(a, b)
+        if (a.priority or 9) ~= (b.priority or 9) then
+            return (a.priority or 9) < (b.priority or 9)
+        end
+        return (a.name or "") < (b.name or "")
+    end)
+    return list
+end
+
+local function getPlayerBuff(spellID)
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        return C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+    end
+    return nil
+end
+
+local function getSpellIcon(spellID)
+    if C_Spell and C_Spell.GetSpellInfo then
+        local info = C_Spell.GetSpellInfo(spellID)
+        if info and info.iconID then return info.iconID end
+    end
+    if GetSpellTexture then return GetSpellTexture(spellID) end
+    return 134400
+end
+
+local AURA_ICON_SIZE = 52
+local function buildAurasHUD()
+    if state.aurasHUD then return state.aurasHUD end
+
+    local H = CreateFrame("Frame", nil, UIParent)
+    H:SetSize(420, AURA_ICON_SIZE + 20)
+    H:SetMovable(true)
+    H:EnableMouse(false)
+    H:SetClampedToScreen(true)
+    H:SetFrameStrata("MEDIUM")
+
+    local p = ResurgenceDB.aurasHudPos or { "CENTER", 0, -180 }
+    H:SetPoint(p[1] or "CENTER", UIParent, p[1] or "CENTER", p[2] or 0, p[3] or -180)
+
+    -- Drag handle visible only when unlocked
+    H.handle = H:CreateTexture(nil, "BACKGROUND")
+    H.handle:SetAllPoints()
+    H.handle:SetColorTexture(0, 0.3, 0.5, 0.18)
+    H.handle:Hide()
+
+    H.label = makeText(H, "RESURGENCE — Auras (drag to move)",
+        "GameFontDisableSmall", C.cyanDim)
+    H.label:SetPoint("TOP", 0, 8)
+    H.label:Hide()
+
+    H:RegisterForDrag("LeftButton")
+    H:SetScript("OnDragStart", function(self)
+        if not ResurgenceDB.aurasHudLocked then self:StartMoving() end
+    end)
+    H:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local p1, _, _, x, y = self:GetPoint()
+        ResurgenceDB.aurasHudPos = { p1, x, y }
+    end)
+
+    H.icons = {}    -- aura.id -> icon frame (pooled)
+
+    function H:Refresh()
+        local active = getActiveAuras()
+        -- Hide all current icons
+        for _, ic in pairs(self.icons) do ic:Hide() end
+
+        local x = 8
+        for _, aura in ipairs(active) do
+            local found, dur, exp = false, 0, 0
+            local data = getPlayerBuff(aura.spellID)
+            if data then
+                found = true
+                dur = data.duration or 0
+                exp = data.expirationTime or 0
+            end
+
+            if found then
+                local ic = self.icons[aura.id]
+                if not ic then
+                    ic = CreateFrame("Frame", nil, self, "BackdropTemplate")
+                    ic:SetSize(AURA_ICON_SIZE, AURA_ICON_SIZE)
+                    ic.tex = ic:CreateTexture(nil, "ARTWORK")
+                    ic.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                    ic.tex:SetAllPoints()
+                    ic.tex:SetTexture(getSpellIcon(aura.spellID))
+                    if ic.SetBackdrop then
+                        ic:SetBackdrop({
+                            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                            edgeSize = 12,
+                            insets = { left = 2, right = 2, top = 2, bottom = 2 },
+                        })
+                        ic:SetBackdropBorderColor(rgb(C.gold))
+                    end
+                    ic.cd = CreateFrame("Cooldown", nil, ic, "CooldownFrameTemplate")
+                    ic.cd:SetAllPoints()
+                    ic.cd:SetSwipeColor(0, 0, 0, 0.55)
+                    ic.cd:SetDrawEdge(true)
+                    ic.cd:SetHideCountdownNumbers(false)
+                    ic:EnableMouse(true)
+                    ic:SetScript("OnEnter", function(self_)
+                        GameTooltip:SetOwner(self_, "ANCHOR_BOTTOM")
+                        GameTooltip:SetText(aura.name, 1, 0.85, 0.2)
+                        GameTooltip:AddLine(aura.tag or "buff", 0.5, 0.7, 1)
+                        GameTooltip:Show()
+                    end)
+                    ic:SetScript("OnLeave", function() GameTooltip:Hide() end)
+                    self.icons[aura.id] = ic
+                end
+                ic:ClearAllPoints()
+                ic:SetPoint("LEFT", self, "LEFT", x, 0)
+                ic:Show()
+                if dur > 0 and exp > 0 then
+                    ic.cd:SetCooldown(exp - dur, dur)
+                else
+                    ic.cd:Clear()
+                end
+                x = x + AURA_ICON_SIZE + 6
+            end
+        end
+
+        if x == 8 then
+            self:SetAlpha(0.0)
+        else
+            self:SetAlpha(1.0)
+        end
+        self:SetWidth(math.max(60, x + 8))
+    end
+
+    function H:ApplyLock()
+        if ResurgenceDB.aurasHudLocked then
+            self:EnableMouse(false)
+            self.handle:Hide()
+            self.label:Hide()
+        else
+            self:EnableMouse(true)
+            self.handle:Show()
+            self.label:Show()
+            self:SetAlpha(1.0)  -- always visible while unlocked
+        end
+    end
+
+    state.aurasHUD = H
+    H:ApplyLock()
+    H:Refresh()
+    return H
+end
+
+local function refreshAurasHUD()
+    if state.aurasHUD then state.aurasHUD:Refresh() end
+end
+
+local function isAurasModuleEnabled()
+    if ResurgenceDB.preferences and ResurgenceDB.preferences.modules then
+        return ResurgenceDB.preferences.modules.auras ~= false
+    end
+    return true  -- default on
+end
+
+local auraHandler = CreateFrame("Frame")
+auraHandler:RegisterUnitEvent("UNIT_AURA", "player")
+auraHandler:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+auraHandler:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_AURA" and unit ~= "player" then return end
+    if not isAurasModuleEnabled() then return end
+    if not state.aurasHUD then buildAurasHUD() end
+    refreshAurasHUD()
+end)
+
+----------------------------------------------------------------------
+-- Auras tab content
+----------------------------------------------------------------------
+local function buildAurasContent(parent)
+    local outer = makePanel(parent, { 0, 0, 0, 0 })
+    outer:SetAllPoints()
+
+    local header = makeText(outer, "Auras", "GameFontNormalHuge", C.gold)
+    header:SetPoint("TOPLEFT", 24, -20)
+
+    local sub = makeText(outer,
+        "Procs and active buffs hand-picked for your class. Toggle individual entries below. The floating panel on your screen updates live.",
+        "GameFontNormal", C.textMuted)
+    sub:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+    sub:SetWidth(660)
+    sub:SetJustifyH("LEFT")
+
+    -- Quick controls row
+    local row = makePanel(outer, C.panel)
+    row:SetHeight(40)
+    row:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -16)
+    row:SetPoint("RIGHT", outer, "RIGHT", -28, 0)
+
+    local lockBtn = makeButton(row, "Toggle Lock", 130, 26, C.cyan)
+    lockBtn:SetPoint("LEFT", 10, 0)
+    lockBtn:SetScript("OnClick", function()
+        ResurgenceDB.aurasHudLocked = not ResurgenceDB.aurasHudLocked
+        if state.aurasHUD then state.aurasHUD:ApplyLock() end
+        local s = ResurgenceDB.aurasHudLocked and "locked" or "unlocked"
+        print("|cffffd700[Resurgence]|r aura panel " .. s)
+    end)
+
+    local resetBtn = makeButton(row, "Reset position", 130, 26, C.gold)
+    resetBtn:SetPoint("LEFT", lockBtn, "RIGHT", 8, 0)
+    resetBtn:SetScript("OnClick", function()
+        ResurgenceDB.aurasHudPos = { "CENTER", 0, -180 }
+        if state.aurasHUD then
+            state.aurasHUD:ClearAllPoints()
+            state.aurasHUD:SetPoint("CENTER", UIParent, "CENTER", 0, -180)
+        end
+    end)
+
+    local testBtn = makeButton(row, "Refresh", 100, 26, C.gold)
+    testBtn:SetPoint("LEFT", resetBtn, "RIGHT", 8, 0)
+    testBtn:SetScript("OnClick", function()
+        if not state.aurasHUD then buildAurasHUD() end
+        refreshAurasHUD()
+        print("|cffffd700[Resurgence]|r refreshed")
+    end)
+
+    -- Class-filtered list
+    local scroll = CreateFrame("ScrollFrame", nil, outer, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", row, "BOTTOMLEFT", 0, -12)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 14)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(660, 1)
+    scroll:SetScrollChild(content)
+
+    local class = getPlayerClass()
+    local y = 0
+    if not Resurgence_AuraDB then
+        local err = makeText(content, "Aura library not loaded.", "GameFontNormal", C.textFaint)
+        err:SetPoint("TOPLEFT", 4, -y)
+        content:SetHeight(40)
+        return outer
+    end
+
+    local count = 0
+    for _, aura in ipairs(Resurgence_AuraDB) do
+        if aura.class == class or aura.class == "ALL" then
+            count = count + 1
+            local card = makePanel(content, C.panel)
+            card:SetHeight(50)
+            card:SetPoint("TOPLEFT", 0, -y)
+            card:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+
+            -- Priority bar
+            local pbar = makeBorderLine(card,
+                aura.priority == 1 and C.gold or (aura.priority == 2 and C.cyan or C.textFaint),
+                3, "LEFT", 0)
+
+            -- Spell icon
+            local ic = card:CreateTexture(nil, "ARTWORK")
+            ic:SetTexture(getSpellIcon(aura.spellID))
+            ic:SetSize(34, 34)
+            ic:SetPoint("LEFT", 14, 0)
+            ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            -- Name
+            local name = makeText(card, aura.name, "GameFontNormalLarge", C.gold)
+            name:SetPoint("TOPLEFT", ic, "TOPRIGHT", 12, -2)
+
+            -- Tag + spec
+            local meta_ = makeText(card,
+                (aura.tag or "buff") .. (aura.spec and (" · " .. aura.spec) or ""),
+                "GameFontDisableSmall", C.textMuted)
+            meta_:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
+
+            -- Toggle checkbox
+            local cb = CreateFrame("CheckButton", nil, card, "UICheckButtonTemplate")
+            cb:SetPoint("RIGHT", -14, 0)
+            cb:SetSize(22, 22)
+            cb:SetChecked(not (ResurgenceDB.aurasDisabled and ResurgenceDB.aurasDisabled[aura.id]))
+            cb:SetScript("OnClick", function(self_)
+                ResurgenceDB.aurasDisabled = ResurgenceDB.aurasDisabled or {}
+                if self_:GetChecked() then
+                    ResurgenceDB.aurasDisabled[aura.id] = nil
+                else
+                    ResurgenceDB.aurasDisabled[aura.id] = true
+                end
+                refreshAurasHUD()
+            end)
+
+            y = y + 50 + 6
+        end
+    end
+
+    if count == 0 then
+        local none = makeText(content, "No curated auras for your class yet. Drop an issue on GitHub if you'd like one added.",
+            "GameFontHighlight", C.textMuted)
+        none:SetPoint("TOPLEFT", 4, -8)
+        none:SetWidth(620)
+        y = 60
+    end
+
+    content:SetHeight(math.max(y, 1))
+    return outer
+end
+
+----------------------------------------------------------------------
 -- Tab dispatcher
 ----------------------------------------------------------------------
 local TAB_BUILDERS = {
     welcome  = buildWelcomeContent,
+    auras    = buildAurasContent,
     buffs    = buildBuffsContent,
     roadmap  = buildRoadmapContent,
     about    = buildAboutContent,
@@ -1180,14 +1509,214 @@ local function buildMainWindow()
 end
 
 ----------------------------------------------------------------------
--- Welcome popup (first-time)
+-- ONBOARDING WIZARD (first-launch, replayable from /res setup)
+-- Three-step setup that asks role, content focus, and modules, then
+-- writes preferences into ResurgenceDB so the rest of the addon adapts.
 ----------------------------------------------------------------------
-local function buildWelcomePopup()
+local WIZARD_STEPS = 3
+
+local function buildWizardStepWelcome(parent)
+    local p = makePanel(parent, { 0, 0, 0, 0 })
+    p:SetAllPoints()
+    p.logo = p:CreateTexture(nil, "ARTWORK")
+    p.logo:SetTexture(LOGO_PATH)
+    p.logo:SetSize(140, 140)
+    p.logo:SetPoint("TOP", 0, -10)
+    p.title = makeText(p, "Welcome to Resurgence", "GameFontNormalHuge", C.gold)
+    p.title:SetPoint("TOP", p.logo, "BOTTOM", 0, -10)
+    p.body = makeText(p, "", "GameFontNormal", C.text)
+    p.body:SetPoint("TOP", p.title, "BOTTOM", 0, -16)
+    p.body:SetWidth(540)
+    p.body:SetJustifyH("CENTER")
+    p.body:SetSpacing(4)
+    p.body:SetText(
+        "We'll set things up in three quick steps : your role, the content you play, " ..
+        "and the modules you want enabled. Takes 30 seconds. " ..
+        "Skip any step at any time and adjust later from the Settings tab.")
+    p.skip = makeText(p, "You can replay this wizard any time with |cff80c0ff/res setup|r.",
+        "GameFontDisableSmall", C.textFaint)
+    p.skip:SetPoint("BOTTOM", 0, 16)
+    return p
+end
+
+local function buildWizardStepRole(parent, refsOut)
+    local p = makePanel(parent, { 0, 0, 0, 0 })
+    p:SetAllPoints()
+    local title = makeText(p, "What's your main role ?", "GameFontNormalHuge", C.gold)
+    title:SetPoint("TOP", 0, -16)
+    local sub = makeText(p,
+        "We'll prioritize the procs and buffs that matter for that role first.",
+        "GameFontNormal", C.textMuted)
+    sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
+
+    refsOut.role = ResurgenceDB.preferences.role
+    refsOut.contentSelected = refsOut.contentSelected or {}
+    -- Pre-init from saved
+    for _, c in ipairs({ "mythic+", "raid", "pvp", "world" }) do
+        refsOut.contentSelected[c] = (ResurgenceDB.preferences.content and ResurgenceDB.preferences.content[c]) or false
+    end
+
+    local roles = {
+        { id = "dps",    label = "DPS",     desc = "Damage focus, all procs of all DPS specs" },
+        { id = "healer", label = "Healer",  desc = "Healing-side procs and clearcasts" },
+        { id = "tank",   label = "Tank",    desc = "Defensives, charge buffs, active mitigation" },
+    }
+
+    local startY = -90
+    for i, r in ipairs(roles) do
+        local btn = CreateFrame("Button", nil, p, "BackdropTemplate")
+        btn:SetSize(540, 56)
+        btn:SetPoint("TOP", 0, startY - (i - 1) * 64)
+        btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+        btn.bg:SetAllPoints()
+        setBG(btn.bg, C.panel)
+        if btn.SetBackdrop then
+            btn:SetBackdrop({
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 12,
+                insets = { left = 2, right = 2, top = 2, bottom = 2 },
+            })
+            btn:SetBackdropBorderColor(rgb(C.panelHover))
+        end
+        local label = makeText(btn, r.label, "GameFontNormalLarge", C.gold)
+        label:SetPoint("TOPLEFT", 18, -10)
+        local desc = makeText(btn, r.desc, "GameFontHighlightSmall", C.text)
+        desc:SetPoint("TOPLEFT", 18, -32)
+
+        btn:SetScript("OnClick", function(self_)
+            refsOut.role = r.id
+            for _, b in ipairs(refsOut._roleButtons or {}) do
+                if b.SetBackdropBorderColor then b:SetBackdropBorderColor(rgb(C.panelHover)) end
+                setBG(b.bg, C.panel)
+            end
+            if self_.SetBackdropBorderColor then self_:SetBackdropBorderColor(rgb(C.gold)) end
+            setBG(self_.bg, C.panelHover)
+        end)
+        refsOut._roleButtons = refsOut._roleButtons or {}
+        table.insert(refsOut._roleButtons, btn)
+        if refsOut.role == r.id then
+            if btn.SetBackdropBorderColor then btn:SetBackdropBorderColor(rgb(C.gold)) end
+            setBG(btn.bg, C.panelHover)
+        end
+    end
+
+    -- Content checkboxes
+    local cTitle = makeText(p, "What content do you mostly do ?",
+        "GameFontNormalLarge", C.cyan)
+    cTitle:SetPoint("TOP", 0, startY - (#roles * 64) - 12)
+
+    local contentOptions = {
+        { id = "mythic+", label = "Mythic+ Dungeons" },
+        { id = "raid",    label = "Raids" },
+        { id = "pvp",     label = "PvP (Arenas / BGs)" },
+        { id = "world",   label = "World Content / Levelling" },
+    }
+    local cy = startY - (#roles * 64) - 48
+    for i, opt in ipairs(contentOptions) do
+        local cb = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+        cb:SetSize(28, 28)
+        local col = (i - 1) % 2
+        local rowi = math.floor((i - 1) / 2)
+        cb:SetPoint("TOPLEFT", 80 + col * 240, cy - rowi * 32)
+        cb:SetChecked(refsOut.contentSelected[opt.id] or false)
+        cb:SetScript("OnClick", function(self_)
+            refsOut.contentSelected[opt.id] = self_:GetChecked() and true or false
+        end)
+        local cbLabel = makeText(p, opt.label, "GameFontHighlight", C.text)
+        cbLabel:SetPoint("LEFT", cb, "RIGHT", 6, 0)
+    end
+
+    return p
+end
+
+local function buildWizardStepModules(parent, refsOut)
+    local p = makePanel(parent, { 0, 0, 0, 0 })
+    p:SetAllPoints()
+    local title = makeText(p, "Pick your modules", "GameFontNormalHuge", C.gold)
+    title:SetPoint("TOP", 0, -16)
+    local sub = makeText(p,
+        "Enable what you want now. You can flip these any time from the Settings tab.",
+        "GameFontNormal", C.textMuted)
+    sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
+
+    refsOut.modules = refsOut.modules or {}
+    -- Pre-init from saved or defaults (auras + buffs default ON)
+    local prevModules = ResurgenceDB.preferences.modules or {}
+    refsOut.modules.auras = (prevModules.auras ~= false) and true or false
+    refsOut.modules.buffs = (prevModules.buffs ~= false) and true or false
+
+    local modules = {
+        {
+            id = "auras",
+            label = "Personal Auras",
+            desc = "Floating panel with the procs and active buffs that matter for your spec. Live.",
+            recommended = true,
+        },
+        {
+            id = "buffs",
+            label = "World Buffs HUD",
+            desc = "On-screen window with countdowns of every active world event. Click to track with native arrow.",
+            recommended = true,
+        },
+        {
+            id = "group",
+            label = "Group Awareness",
+            desc = "Cooldowns of your party / raid in real time. Coming in v0.5.",
+            disabled = true,
+        },
+        {
+            id = "combat",
+            label = "Combat Insights",
+            desc = "Live damage, healing, threat, top spell. Coming in v0.6.",
+            disabled = true,
+        },
+    }
+
+    local startY = -90
+    for i, m in ipairs(modules) do
+        local row = makePanel(p, C.panel)
+        row:SetSize(540, 60)
+        row:SetPoint("TOP", 0, startY - (i - 1) * 68)
+
+        local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        cb:SetSize(28, 28)
+        cb:SetPoint("LEFT", 12, 0)
+        cb:SetChecked(refsOut.modules[m.id] or false)
+        if m.disabled then
+            cb:SetEnabled(false)
+            cb:SetAlpha(0.4)
+            cb:SetChecked(false)
+        else
+            cb:SetScript("OnClick", function(self_)
+                refsOut.modules[m.id] = self_:GetChecked() and true or false
+            end)
+        end
+
+        local label = makeText(row, m.label, "GameFontNormalLarge",
+            m.disabled and C.textFaint or C.gold)
+        label:SetPoint("TOPLEFT", cb, "TOPRIGHT", 12, 0)
+
+        if m.recommended then
+            local rec = makeText(row, " · recommended", "GameFontDisableSmall", C.cyan)
+            rec:SetPoint("LEFT", label, "RIGHT", 4, 0)
+        end
+
+        local desc = makeText(row, m.desc, "GameFontHighlightSmall",
+            m.disabled and C.textFaint or C.text)
+        desc:SetPoint("TOPLEFT", cb, "BOTTOMRIGHT", 12, 8)
+        desc:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+        desc:SetJustifyH("LEFT")
+    end
+
+    return p
+end
+
+local function buildOnboardingWizard()
     if state.welcomePopup then return state.welcomePopup end
 
     local P = CreateFrame("Frame", nil, UIParent)
-    P:SetSize(560, 420)
-    P:SetPoint("CENTER", 0, 60)
+    P:SetSize(620, 600)
+    P:SetPoint("CENTER", 0, 40)
     P:SetMovable(true)
     P:EnableMouse(true)
     P:SetFrameStrata("DIALOG")
@@ -1208,54 +1737,125 @@ local function buildWelcomePopup()
     makeBorderLine(P, C.bronze, 2, "LEFT", 0)
     makeBorderLine(P, C.bronze, 2, "RIGHT", 0)
 
-    -- Logo
-    P.logo = inner:CreateTexture(nil, "ARTWORK")
-    P.logo:SetTexture(LOGO_PATH)
-    P.logo:SetSize(120, 120)
-    P.logo:SetPoint("TOP", 0, -16)
+    -- Header progress bar
+    local progressTrack = inner:CreateTexture(nil, "OVERLAY")
+    setBG(progressTrack, C.panelHover)
+    progressTrack:SetHeight(3)
+    progressTrack:SetPoint("TOPLEFT", 0, -0)
+    progressTrack:SetPoint("TOPRIGHT", 0, 0)
+    local progressFill = inner:CreateTexture(nil, "OVERLAY")
+    setBG(progressFill, C.cyan)
+    progressFill:SetHeight(3)
+    progressFill:SetPoint("TOPLEFT", 0, 0)
+    progressFill:SetWidth(0)
 
-    -- Title
-    P.title = makeText(inner, "Welcome to Resurgence", "GameFontNormalHuge", C.gold)
-    P.title:SetPoint("TOP", P.logo, "BOTTOM", 0, -8)
+    -- Step content area
+    local contentArea = makePanel(inner, { 0, 0, 0, 0 })
+    contentArea:SetPoint("TOPLEFT", 16, -32)
+    contentArea:SetPoint("BOTTOMRIGHT", -16, 64)
 
-    -- Subtitle
-    P.subtitle = makeText(inner,
-        "Premium awareness for the 12.0.x era",
-        "GameFontNormal", C.cyan)
-    P.subtitle:SetPoint("TOP", P.title, "BOTTOM", 0, -4)
+    -- Buttons row
+    local btnBack = makeButton(inner, "Back", 110, 32, C.textMuted)
+    btnBack:SetPoint("BOTTOMLEFT", 16, 16)
 
-    -- Body
-    local body = makeText(inner, "", "GameFontNormal", C.text)
-    body:SetPoint("TOP", P.subtitle, "BOTTOM", 0, -16)
-    body:SetWidth(480)
-    body:SetJustifyH("CENTER")
-    body:SetSpacing(4)
-    body:SetText(
-        "Look at your screen : a small circular logo just appeared on the right edge. " ..
-        "Click it any time to open the full menu, or use |cff80c0ff/res|r in chat.\n\n" ..
-        "This early build is the visual shell. The aura engine ships next. " ..
-        "Browse the Roadmap to see what's coming.")
+    local btnSkip = makeButton(inner, "Skip", 110, 32, C.textFaint)
+    btnSkip:SetPoint("BOTTOM", -70, 16)
 
-    -- Buttons
-    local btnRoadmap = makeButton(inner, "Show me the roadmap", 200, 32, C.cyan)
-    btnRoadmap:SetPoint("BOTTOM", -110, 24)
-    btnRoadmap:SetScript("OnClick", function()
-        ResurgenceDB.welcomed = true
-        P:Hide()
-        ResurgenceUI_OpenTab("roadmap")
+    local btnNext = makeButton(inner, "Next", 140, 32, C.gold)
+    btnNext:SetPoint("BOTTOMRIGHT", -16, 16)
+
+    -- Step state
+    local refs = {}
+    local step = 1
+    local stepFrames = {}
+
+    local function renderStep()
+        for _, f in pairs(stepFrames) do f:Hide() end
+        if not stepFrames[step] then
+            if step == 1 then
+                stepFrames[step] = buildWizardStepWelcome(contentArea)
+            elseif step == 2 then
+                stepFrames[step] = buildWizardStepRole(contentArea, refs)
+            elseif step == 3 then
+                stepFrames[step] = buildWizardStepModules(contentArea, refs)
+            end
+        end
+        if stepFrames[step] then stepFrames[step]:Show() end
+
+        progressFill:SetWidth((P:GetWidth() - 4) * (step / WIZARD_STEPS))
+
+        if step == 1 then
+            btnBack:Hide()
+        else
+            btnBack:Show()
+        end
+
+        if step == WIZARD_STEPS then
+            btnNext.label:SetText("Finish setup")
+        else
+            btnNext.label:SetText("Next  >")
+        end
+    end
+
+    btnBack:SetScript("OnClick", function()
+        if step > 1 then step = step - 1 end
+        renderStep()
     end)
 
-    local btnDismiss = makeButton(inner, "Got it, take me to the game", 200, 32, C.gold)
-    btnDismiss:SetPoint("BOTTOM", 110, 24)
-    btnDismiss:SetScript("OnClick", function()
+    btnSkip:SetScript("OnClick", function()
+        ResurgenceDB.setupDone = true
         ResurgenceDB.welcomed = true
         P:Hide()
+        print("|cffffd700[Resurgence]|r setup skipped. Use |cff80c0ff/res setup|r to run it later.")
+    end)
+
+    btnNext:SetScript("OnClick", function()
+        if step < WIZARD_STEPS then
+            step = step + 1
+            renderStep()
+        else
+            -- Save preferences
+            ResurgenceDB.preferences = ResurgenceDB.preferences or {}
+            ResurgenceDB.preferences.role    = refs.role
+            ResurgenceDB.preferences.content = refs.contentSelected or {}
+            ResurgenceDB.preferences.modules = refs.modules or {}
+            ResurgenceDB.setupDone = true
+            ResurgenceDB.welcomed = true
+
+            -- Apply : open the buffs HUD if user enabled the module
+            if refs.modules and refs.modules.buffs and showBuffsHUD then
+                ResurgenceDB.buffsHudOpen = true
+                showBuffsHUD()
+            end
+            -- Refresh auras HUD if module enabled
+            if refs.modules and refs.modules.auras then
+                if not state.aurasHUD then buildAurasHUD() end
+                refreshAurasHUD()
+            end
+
+            P:Hide()
+            print(string.format(
+                "|cffffd700[Resurgence]|r setup complete. Role : |cff80c0ff%s|r. Modules : |cff80c0ff%s|r. Click the logo any time.",
+                tostring(refs.role or "any"),
+                table.concat(
+                    (function()
+                        local list = {}
+                        for k, v in pairs(refs.modules or {}) do
+                            if v then table.insert(list, k) end
+                        end
+                        return list
+                    end)(),
+                    ", "
+                )
+            ))
+        end
     end)
 
     -- Close X
     P.close = CreateFrame("Button", nil, inner, "UIPanelCloseButton")
     P.close:SetPoint("TOPRIGHT", -2, -2)
     P.close:SetScript("OnClick", function()
+        ResurgenceDB.setupDone = true
         ResurgenceDB.welcomed = true
         P:Hide()
     end)
@@ -1284,7 +1884,18 @@ function ResurgenceUI_Toggle()
 end
 
 function ResurgenceUI_ShowWelcome()
-    local P = buildWelcomePopup()
+    local P = buildOnboardingWizard()
+    P:Show()
+end
+
+function ResurgenceUI_StartSetup()
+    -- Force the wizard to fully reset and replay
+    if state.welcomePopup then
+        state.welcomePopup:Hide()
+        state.welcomePopup = nil
+    end
+    ResurgenceDB.setupDone = false
+    local P = buildOnboardingWizard()
     P:Show()
 end
 
@@ -1313,13 +1924,21 @@ handler:SetScript("OnEvent", function(_, event, name)
         if ResurgenceDB.buffsHudOpen then
             C_Timer.After(0.5, function() showBuffsHUD() end)
         end
-        if not ResurgenceDB.welcomed then
+        -- Build aura HUD if module is enabled
+        if isAurasModuleEnabled() then
+            C_Timer.After(0.6, function()
+                buildAurasHUD()
+                refreshAurasHUD()
+            end)
+        end
+        -- First-launch onboarding wizard
+        if not ResurgenceDB.setupDone then
             C_Timer.After(2.0, function()
                 ResurgenceUI_ShowWelcome()
             end)
         end
         print(string.format(
-            "|cffffd700[Resurgence]|r v%s loaded. Click the logo on the right edge of your screen, or use |cff80c0ff/res|r.",
+            "|cffffd700[Resurgence]|r v%s loaded. Click the logo, or use |cff80c0ff/res|r.",
             ADDON_VERSION))
     end
 end)
@@ -1348,9 +1967,10 @@ SlashCmdList["RESURGENCE"] = function(msg)
             ResurgenceDB.launcherHidden = true
             print("|cffffd700[Resurgence]|r launcher hidden. /res show to bring it back.")
         end
-    elseif cmd == "welcome" then
-        ResurgenceDB.welcomed = false
-        ResurgenceUI_ShowWelcome()
+    elseif cmd == "welcome" or cmd == "setup" then
+        ResurgenceUI_StartSetup()
+    elseif cmd == "auras" then
+        ResurgenceUI_OpenTab("auras")
     elseif cmd == "roadmap" then
         ResurgenceUI_OpenTab("roadmap")
     elseif cmd == "about" then
@@ -1384,13 +2004,14 @@ SlashCmdList["RESURGENCE"] = function(msg)
     elseif cmd == "help" or cmd == "?" then
         print("|cffffd700[Resurgence]|r v" .. ADDON_VERSION .. " commands :")
         print("  |cff80c0ff/res|r              toggle the main window")
+        print("  |cff80c0ff/res setup|r        replay the onboarding wizard")
+        print("  |cff80c0ff/res auras|r        open Auras tab")
+        print("  |cff80c0ff/res buffs|r        toggle the floating World Buffs HUD")
         print("  |cff80c0ff/res show / hide|r  toggle the on-screen launcher button")
-        print("  |cff80c0ff/res welcome|r      replay the welcome popup")
         print("  |cff80c0ff/res roadmap|r      open Roadmap tab")
         print("  |cff80c0ff/res about|r        open About tab")
         print("  |cff80c0ff/res settings|r     open Settings tab")
         print("  |cff80c0ff/res support|r      open Support / Links tab")
-        print("  |cff80c0ff/res buffs|r        toggle the floating World Buffs HUD")
         print("  |cff80c0ff/res reset|r        reset launcher and window positions")
     else
         print("|cffffd700[Resurgence]|r unknown. |cff80c0ff/res help|r for commands")
