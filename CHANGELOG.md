@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1-alpha
+- Fix : `attempt to index local 'p' (a nil value)` crash on first load when the saved variables file pre-dates the v0.2.0 schema. Defaults now applied in `ADDON_LOADED` (after SavedVariables are restored) instead of at file scope, plus defensive fallbacks in the launcher and main-window builders.
+- Updated logo : new render with tighter framing, more refined gold bezel, brighter cyan rim glow.
+
 ## 0.2.0-alpha
 - Pivot to UI shell milestone : the visual foundation ships first, the engine follows in v0.3.0
 - New : on-screen circular logo button (draggable with shift, click to open menu, right click to hide for the session)

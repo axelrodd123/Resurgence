@@ -227,7 +227,7 @@ local function buildLauncher()
     L:SetClampedToScreen(true)
     L:SetFrameStrata("MEDIUM")
 
-    local p = ResurgenceDB.launcherPos
+    local p = ResurgenceDB.launcherPos or { "RIGHT", -8, 80 }
     L:SetPoint(p[1] or "RIGHT", UIParent, p[1] or "RIGHT", p[2] or -8, p[3] or 80)
 
     -- Soft drop shadow
@@ -620,7 +620,7 @@ local function buildMainWindow()
     W:SetFrameStrata("DIALOG")
     W:Hide()
 
-    local p = ResurgenceDB.windowPos
+    local p = ResurgenceDB.windowPos or { "CENTER", 0, 40 }
     W:SetPoint(p[1] or "CENTER", UIParent, p[1] or "CENTER", p[2] or 0, p[3] or 40)
 
     -- Outer dark backdrop
@@ -899,7 +899,16 @@ handler:RegisterEvent("PLAYER_LOGIN")
 handler:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" then
         if name == ADDON_NAME then
+            -- Defaults applied here (after SavedVariables are restored). Doing
+            -- this at file scope is unreliable when the saved file pre-dates
+            -- the current schema, because the saved table can be re-bound
+            -- after the file has run.
             ResurgenceDB = ResurgenceDB or {}
+            if ResurgenceDB.welcomed       == nil then ResurgenceDB.welcomed       = false end
+            if ResurgenceDB.launcherHidden == nil then ResurgenceDB.launcherHidden = false end
+            ResurgenceDB.launcherPos = ResurgenceDB.launcherPos or { "RIGHT", -8, 80 }
+            ResurgenceDB.windowPos   = ResurgenceDB.windowPos   or { "CENTER", 0, 40 }
+            ResurgenceDB.lastTab     = ResurgenceDB.lastTab     or "welcome"
         end
     elseif event == "PLAYER_LOGIN" then
         buildLauncher()
