@@ -1,21 +1,74 @@
-MIT License
+Resurgence — Proprietary License
+Copyright (c) 2026 AxelRodd. All rights reserved.
 
-Copyright (c) 2026 AxelRodd
+PREAMBLE
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This is the source code of the Resurgence World of Warcraft addon. Although
+the source is publicly visible on GitHub (axelrodd123/Resurgence) for
+transparency and audit purposes, it is NOT open source. The author retains
+all rights to the code, the brand, the logo, and the curated aura library.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Reading the code is allowed. Modifying, redistributing, or building derivative
+works is not.
+
+PERMITTED USES
+
+You may :
+
+  1. Download the official distributed package (the zip published on
+     CurseForge or the GitHub Releases page) and install it inside your
+     personal World of Warcraft client.
+
+  2. Run the addon as part of your normal WoW gameplay, including in groups
+     and guilds, on any number of personal characters and accounts.
+
+  3. Share the official, unmodified zip with other players for the sole
+     purpose of helping them install Resurgence.
+
+  4. Read the source code on GitHub for educational and audit purposes.
+
+  5. Submit bug reports and feature suggestions via GitHub Issues.
+
+PROHIBITED USES
+
+You may NOT, without explicit prior written permission from AxelRodd :
+
+  1. Modify, alter, translate, port, or create derivative works based on
+     the source code, the configuration files, the textures, the icons,
+     the logo, or the curated aura database.
+
+  2. Redistribute the addon under any name other than its original name,
+     or in any package other than the official zip published by AxelRodd.
+
+  3. Reverse-engineer, decompile, or disassemble the addon for the purpose
+     of creating a competing addon, replicating its features, or extracting
+     the curated content.
+
+  4. Sell, sublicense, rent, lease, or otherwise commercially exploit the
+     addon, its assets, its name, or its brand.
+
+  5. Use the Resurgence name, logo, or branding to endorse, promote, or
+     market any other software product.
+
+  6. Remove, obscure, or alter the copyright notice, the author signature,
+     or the license file in any redistributed copy.
+
+RESERVATION OF RIGHTS
+
+All rights not expressly granted above are reserved by AxelRodd. The author
+reserves the right to update the terms of this license for future versions;
+the version of the license shipped with each release governs that release.
+
+NO WARRANTY
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+CONTACT
+
+For permission requests, licensing inquiries, or commercial use proposals :
+github.com/axelrodd123/Resurgence/issues

@@ -1,6 +1,6 @@
 # Resurgence
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![WoW: Retail 12.0](https://img.shields.io/badge/WoW-Retail%2012.0-orange.svg)]()
 [![Status: alpha](https://img.shields.io/badge/status-alpha-red.svg)]()
 
@@ -41,7 +41,11 @@ While WeakAuras, Plater, OmniCD and Details have all been broken or restricted b
 
 ## License
 
-MIT.
+Proprietary. Copyright © 2026 AxelRodd. All rights reserved.
+
+The source is publicly visible on GitHub for transparency and audit purposes, but Resurgence is **not open source**. You may install and run the addon, share the official unmodified zip with other players, and read the code. You may not modify, redistribute modified versions, or create derivative works. See [LICENSE](LICENSE) for the full terms.
+
+Bug reports and feature suggestions are welcome via [GitHub Issues](https://github.com/axelrodd123/Resurgence/issues).
 
 ## Author
 
