@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.6-alpha (2026-05-09)
+- Fix : the native WoW cursor (the engine arrow / hand / sword) is now hidden when the cursor halo is enabled, so only the Resurgence ring is on screen. Implemented by shipping a 32x32 fully transparent TGA at `textures/cursor_blank.tga` and re-asserting it via `SetCursor` every frame inside the halo's `OnUpdate` (the engine resets the cursor on every hover transition, so a one-shot call would not stick). Restored to default when the halo is toggled off.
+
 ## 0.5.5-alpha (2026-05-09)
 - Fix : the default `ChatFrame1` no longer overlaps the Resurgence mini chat. It is now faded to alpha 0 in Clean Mode (still receives messages so our hooked `AddMessage` mirrors them), instead of being left visible.
 - Fix : the gargoyle / dragon ornament on the right side of the action bar (with the page number and up / down arrows) was rendering through the previous fade pass. Two new layers catch it : a nested-children pass (`MainMenuBar.EndCaps`, `MainMenuBar.BorderArt`, `MainMenuBar.ActionBarPageNumber`, etc., which are not exposed as Lua globals in 12.0.x retail) and a brute-force walk of every region and child of `MainMenuBar` that fades anything not already handled.

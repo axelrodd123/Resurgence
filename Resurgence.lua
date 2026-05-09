@@ -1639,8 +1639,12 @@ end
 -- CUSTOM CURSOR HALO
 -- A colored ring follows the cursor and tints based on what the player
 -- is hovering : red for hostile, green for friendly, gold for quest.
--- Native cursor stays underneath (WoW does not let us hide it).
+-- We also force a transparent texture on the native cursor every frame
+-- so the engine's arrow / hand / sword stops rendering and only our
+-- halo is visible on screen.
 ----------------------------------------------------------------------
+local CURSOR_BLANK = "Interface\\AddOns\\Resurgence\\textures\\cursor_blank"
+
 local function buildCursorHalo()
     if state.cursorHalo then return state.cursorHalo end
 
@@ -1663,6 +1667,14 @@ local function buildCursorHalo()
         local scale = UIParent:GetEffectiveScale() or 1
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+
+        -- Force the native cursor to a transparent texture every frame.
+        -- The engine resets the cursor any time it changes hovered entity
+        -- (sword on hostile, hand on quest, etc.) so we have to keep
+        -- re-asserting the blank texture. Cheap call, runs once per frame.
+        if SetCursor then
+            pcall(SetCursor, CURSOR_BLANK)
+        end
 
         local r, g, b, a = 0.65, 0.80, 1.0, 0.55  -- subtle cyan default
         if UnitExists("mouseover") then
@@ -1691,6 +1703,11 @@ local function buildCursorHalo()
         self.ring:SetVertexColor(r, g, b, a)
     end)
 
+    F:SetScript("OnHide", function()
+        -- Restore the native cursor when the halo is turned off.
+        if SetCursor then pcall(SetCursor, nil) end
+    end)
+
     state.cursorHalo = F
     F:Show()
     return F
@@ -1704,6 +1721,7 @@ end
 
 local function hideCursorHalo()
     if state.cursorHalo then state.cursorHalo:Hide() end
+    if SetCursor then pcall(SetCursor, nil) end
     ResurgenceDB.cursorHalo = false
 end
 
