@@ -1732,6 +1732,44 @@ end
 -- gold accent, draggable. Lets the player see addon messages while the
 -- default chat is restyled or cluttered.
 ----------------------------------------------------------------------
+-- Completely neutralize the Blizzard chat edit boxes. We have our own,
+-- so the default ones must never appear : not on Enter, not on click,
+-- not on focus events. This overrides Show, hides them, disables mouse,
+-- alpha 0, and parents them off-screen so even if some Blizzard code
+-- forces Show, nothing renders.
+local function killBlizzardChatEditBoxes()
+    for i = 1, NUM_CHAT_WINDOWS or 10 do
+        local eb = _G["ChatFrame" .. i .. "EditBox"]
+        if eb then
+            if not eb._resKilled then
+                eb._resKilledShow = eb.Show
+                eb.Show = function() end
+                eb._resKilled = true
+            end
+            pcall(function() eb:Hide() end)
+            pcall(function() eb:SetAlpha(0) end)
+            pcall(function() eb:EnableMouse(false) end)
+            pcall(function() eb:EnableKeyboard(false) end)
+            pcall(function() eb:ClearAllPoints() end)
+            pcall(function() eb:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", -1000, 1000) end)
+        end
+    end
+end
+
+local function restoreBlizzardChatEditBoxes()
+    for i = 1, NUM_CHAT_WINDOWS or 10 do
+        local eb = _G["ChatFrame" .. i .. "EditBox"]
+        if eb and eb._resKilled then
+            eb.Show = eb._resKilledShow
+            eb._resKilled = nil
+            eb._resKilledShow = nil
+            pcall(function() eb:SetAlpha(1) end)
+            pcall(function() eb:EnableMouse(true) end)
+            pcall(function() eb:EnableKeyboard(true) end)
+        end
+    end
+end
+
 local function buildResChat()
     if state.resChat then return state.resChat end
 
@@ -1765,27 +1803,48 @@ local function buildResChat()
     hint:SetTextColor(rgb(C.textFaint))
     hint:SetText("drag · /res for menu")
 
-    -- Scrolling message frame (built-in WoW widget)
+    -- Scrolling message frame (built-in WoW widget, our own styling)
     local msg = CreateFrame("ScrollingMessageFrame", nil, F)
     msg:SetPoint("TOPLEFT", 8, -22)
-    msg:SetPoint("BOTTOMRIGHT", -8, 28)
+    msg:SetPoint("BOTTOMRIGHT", -8, 36)
     msg:SetMaxLines(60)
     msg:SetFontObject(ChatFontNormal)
     msg:SetJustifyH("LEFT")
     msg:SetFading(false)
     msg:SetInsertMode("BOTTOM")
 
-    -- Edit box for slash commands
-    local edit = CreateFrame("EditBox", nil, F)
-    edit:SetSize(404, 22)
-    edit:SetPoint("BOTTOMLEFT", 8, 4)
+    -- Custom edit box (no Blizzard template, fully Resurgence-styled).
+    -- Wrapper frame holds the background and trim, the EditBox itself is
+    -- inset so the text never touches the borders.
+    local editWrap = CreateFrame("Frame", nil, F)
+    editWrap:SetPoint("BOTTOMLEFT",  F, "BOTTOMLEFT",  8, 4)
+    editWrap:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -8, 4)
+    editWrap:SetHeight(26)
+
+    local ebbg = editWrap:CreateTexture(nil, "BACKGROUND")
+    ebbg:SetAllPoints()
+    setBG(ebbg, C.bg)
+    ebbg:SetAlpha(0.92)
+
+    -- Subtle gold trim around the edit box so it reads as its own widget
+    makeBorderLine(editWrap, C.bronze, 1, "TOP",    0)
+    makeBorderLine(editWrap, C.bronze, 1, "BOTTOM", 0)
+    makeBorderLine(editWrap, C.bronze, 1, "LEFT",   0)
+    makeBorderLine(editWrap, C.bronze, 1, "RIGHT",  0)
+
+    -- Gold chevron prompt
+    local prompt = editWrap:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    prompt:SetPoint("LEFT", 8, 0)
+    prompt:SetTextColor(rgb(C.gold))
+    prompt:SetText(">")
+
+    local edit = CreateFrame("EditBox", nil, editWrap)
+    edit:SetPoint("LEFT", prompt, "RIGHT", 6, 0)
+    edit:SetPoint("RIGHT", editWrap, "RIGHT", -8, 0)
+    edit:SetHeight(20)
     edit:SetAutoFocus(false)
     edit:SetFontObject(ChatFontNormal)
     edit:SetTextColor(rgb(C.text))
-    local ebbg = edit:CreateTexture(nil, "BACKGROUND")
-    ebbg:SetAllPoints()
-    setBG(ebbg, C.bg)
-    ebbg:SetAlpha(0.85)
     edit:SetScript("OnEscapePressed", function(self) self:ClearFocus(); self:SetText("") end)
     edit:SetScript("OnEnterPressed", function(self)
         local text = self:GetText() or ""
@@ -1842,6 +1901,26 @@ local function buildResChat()
         ChatFrame1._resChatHooked = true
     end
 
+    -- Kill the Blizzard chat edit boxes once and re-kill periodically
+    -- (some Blizzard code paths re-anchor or re-show them on event).
+    killBlizzardChatEditBoxes()
+    if not state._resChatKillTicker then
+        state._resChatKillTicker = C_Timer.NewTicker(2, killBlizzardChatEditBoxes)
+    end
+
+    -- Redirect the "Open Chat" keybind (Enter by default) to our edit box.
+    if not state._resChatKeybindHooked then
+        if ChatFrame_OpenChat then
+            hooksecurefunc("ChatFrame_OpenChat", function(text)
+                if state.resChat and state.resChat.edit and state.resChat:IsShown() then
+                    if text and text ~= "" then state.resChat.edit:SetText(text) end
+                    state.resChat.edit:SetFocus()
+                end
+            end)
+        end
+        state._resChatKeybindHooked = true
+    end
+
     -- Welcome line
     msg:AddMessage("|cffffd200[Resurgence]|r mini chat ready. Type any slash command here.", 1, 1, 1)
 
@@ -1852,11 +1931,20 @@ end
 local function showResChat()
     if not state.resChat then buildResChat() end
     state.resChat:Show()
+    killBlizzardChatEditBoxes()
+    if not state._resChatKillTicker then
+        state._resChatKillTicker = C_Timer.NewTicker(2, killBlizzardChatEditBoxes)
+    end
     ResurgenceDB.resChat = true
 end
 
 local function hideResChat()
     if state.resChat then state.resChat:Hide() end
+    if state._resChatKillTicker then
+        state._resChatKillTicker:Cancel()
+        state._resChatKillTicker = nil
+    end
+    restoreBlizzardChatEditBoxes()
     ResurgenceDB.resChat = false
 end
 

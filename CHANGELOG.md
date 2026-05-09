@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7-alpha (2026-05-09)
+- Fix : the default Blizzard chat edit box (`ChatFrame1EditBox`, the rounded gold-trimmed "Dire :" bar) was still appearing over the Resurgence mini chat when the player pressed Enter. Now killed outright : its `Show` method is replaced with a no-op, alpha 0, mouse and keyboard disabled, anchor moved off-screen. A 2-second ticker re-asserts the kill in case some Blizzard event path re-anchors it. Restored cleanly when the Resurgence chat is disabled in Settings.
+- New : the "Open Chat" keybind (Enter by default) now focuses the Resurgence edit box instead of opening the Blizzard one. Hooked via `ChatFrame_OpenChat`. Pre-typed text is forwarded.
+- The Resurgence mini chat edit box is rebuilt as a fully custom widget : no Blizzard `InputBoxTemplate`, dedicated wrapper frame with bronze trim on all four sides, gold chevron `>` prompt on the left, dark navy background, text inset so it never touches the borders. The bar now stays inside the chat frame width.
+
 ## 0.5.6-alpha (2026-05-09)
 - Fix : the native WoW cursor (the engine arrow / hand / sword) is now hidden when the cursor halo is enabled, so only the Resurgence ring is on screen. Implemented by shipping a 32x32 fully transparent TGA at `textures/cursor_blank.tga` and re-asserting it via `SetCursor` every frame inside the halo's `OnUpdate` (the engine resets the cursor on every hover transition, so a one-shot call would not stick). Restored to default when the halo is toggled off.
 
