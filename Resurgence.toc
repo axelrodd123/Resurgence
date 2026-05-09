@@ -1,9 +1,8 @@
 ## Interface: 120005
 ## Title: Resurgence
-## Notes: WeakAuras-style proc and cooldown tracker, rebuilt for the 12.0.x era. The ones that work. (proprietary, do not modify)
-## Version: 0.1.0-alpha
+## Notes: WeakAuras-style addons rebuilt for the 12.0.x era. UI shell milestone — engine ships in v0.3.0. (proprietary, do not modify)
+## Version: 0.2.0-alpha
 ## Author: AxelRodd
 ## SavedVariables: ResurgenceDB
 
-AuraDB.lua
 Resurgence.lua
