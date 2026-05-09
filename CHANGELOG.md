@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3-alpha (2026-05-09)
+- Clean Mode now also fades every individual action button (`ActionButton1-12`, `MultiBarBottomLeftButton1-12`, `MultiBarLeftButton1-12`, etc., across 13 button groups, 130+ buttons total). The previous version only faded the parent bars, leaving the buttons drawn on top.
+- Added `TemporaryEnchantFrame` and edit-mode wrappers to the fade list.
+- New : **Cursor Halo**. A colored ring follows your cursor and tints based on what's underneath : red on hostile, green on allies, gold on quest objectives, yellow on neutral. Native cursor stays for precision. Toggle in Settings, on by default.
+
 ## 0.5.2-alpha (2026-05-09)
 - Clean Mode is now full-nuke : the chat frames, the minimap entirely, the world map button, all bag slot icons, every Blizzard popup, every alert frame, and every remaining default UI element are now hidden. Only Resurgence UI elements remain on screen.
 - Auto-enable on upgrade : Clean Mode is forced ON one time for users coming from earlier versions. Toggle off in Settings any time.

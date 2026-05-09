@@ -859,9 +859,18 @@ local function buildSettingsContent(parent)
         function(v) applyChatSkin(v) end,
         C.gold)
 
+    local row4 = addToggleRow(row3, -12,
+        "Cursor halo",
+        "A colored ring follows your cursor : red on enemies, green on allies, gold on quest objectives, yellow on neutral. The native cursor stays underneath for precision.",
+        function() return ResurgenceDB.cursorHalo end,
+        function(v)
+            if v then showCursorHalo() else hideCursorHalo() end
+        end,
+        C.gold)
+
     -- Launcher section (existing)
     local section = makeText(sc, "Launcher button", "GameFontNormalLarge", C.cyan)
-    section:SetPoint("TOPLEFT", row3, "BOTTOMLEFT", 0, -28)
+    section:SetPoint("TOPLEFT", row4, "BOTTOMLEFT", 0, -28)
 
     local desc = makeText(sc,
         "The circular Resurgence logo on your screen. Drag to move. Right click to hide for the session.",
@@ -1450,11 +1459,34 @@ local CLEAN_HIDE_TARGETS = {
 -- Action-bar style frames : can't safely :Hide() during combat, but we can
 -- make them invisible + non-clickable. Keybinds still cast.
 local CLEAN_FADE_TARGETS = {
+    -- 12.0.x edit-mode bar containers
     "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight",
     "MultiBarLeft", "MultiBarRight", "MultiBar5", "MultiBar6", "MultiBar7",
     "StanceBar", "PetActionBar", "PossessActionBar", "OverrideActionBar",
     "ExtraActionBarFrame", "ZoneAbilityFrame",
     "MainMenuBarArtFrame", "StatusTrackingBarManager",
+    -- Edit-mode wrappers
+    "EditModeExpandedDragLayer", "EditModeManagerFrame",
+    -- Temporary buffs and pet
+    "TemporaryEnchantFrame",
+}
+
+-- Individual button collections (action buttons render even when their
+-- parent bar is alpha-0 because they're separately drawn).
+local CLEAN_BUTTON_GROUPS = {
+    { prefix = "ActionButton",                count = 12 },
+    { prefix = "MultiBarBottomLeftButton",    count = 12 },
+    { prefix = "MultiBarBottomRightButton",   count = 12 },
+    { prefix = "MultiBarLeftButton",          count = 12 },
+    { prefix = "MultiBarRightButton",         count = 12 },
+    { prefix = "MultiBar5Button",             count = 12 },
+    { prefix = "MultiBar6Button",             count = 12 },
+    { prefix = "MultiBar7Button",             count = 12 },
+    { prefix = "StanceButton",                count = 10 },
+    { prefix = "PetActionButton",             count = 10 },
+    { prefix = "PossessButton",               count = 2  },
+    { prefix = "OverrideActionBarButton",     count = 6  },
+    { prefix = "BonusActionButton",           count = 12 },
 }
 
 local cleanOriginalShow = {}
@@ -1498,7 +1530,105 @@ local function applyCleanMode(on)
             end
         end
     end
+    -- Individual action buttons (must be faded one by one because they're
+    -- separately rendered even when their parent bar is alpha-0).
+    for _, group in ipairs(CLEAN_BUTTON_GROUPS) do
+        for i = 1, group.count do
+            local b = _G[group.prefix .. i]
+            if b then
+                if on then
+                    pcall(function() b:SetAlpha(0) end)
+                    pcall(function() b:EnableMouse(false) end)
+                else
+                    pcall(function() b:SetAlpha(1) end)
+                    pcall(function() b:EnableMouse(true) end)
+                end
+            end
+        end
+    end
     ResurgenceDB.cleanMode = on
+end
+
+----------------------------------------------------------------------
+-- CUSTOM CURSOR HALO
+-- A colored ring follows the cursor and tints based on what the player
+-- is hovering : red for hostile, green for friendly, gold for quest.
+-- Native cursor stays underneath (WoW does not let us hide it).
+----------------------------------------------------------------------
+local function buildCursorHalo()
+    if state.cursorHalo then return state.cursorHalo end
+
+    local F = CreateFrame("Frame", nil, UIParent)
+    F:SetSize(48, 48)
+    F:SetFrameStrata("TOOLTIP")
+    F:EnableMouse(false)
+    F:Hide()
+
+    -- Outer halo ring
+    F.ring = F:CreateTexture(nil, "OVERLAY")
+    F.ring:SetAllPoints()
+    F.ring:SetTexture("Interface\\COMMON\\GoldRing")
+    F.ring:SetVertexColor(0.7, 0.7, 0.8, 0)
+
+    -- Inner glow dot
+    F.dot = F:CreateTexture(nil, "OVERLAY")
+    F.dot:SetSize(14, 14)
+    F.dot:SetPoint("CENTER")
+    F.dot:SetTexture("Interface\\GLUES\\CharacterSelect\\Glues-AddOn-Icons")
+    F.dot:SetTexCoord(0, 1, 0, 1)
+    F.dot:SetBlendMode("ADD")
+    F.dot:SetAlpha(0)
+
+    F:SetScript("OnUpdate", function(self)
+        local x, y = GetCursorPosition()
+        if not x or not y then return end
+        local scale = UIParent:GetEffectiveScale() or 1
+        self:ClearAllPoints()
+        self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+
+        local r, g, b, a = 0.7, 0.7, 0.8, 0
+        if UnitExists("mouseover") then
+            local isQuest = false
+            -- Quest indicators : quest boss flag, or some quest objective
+            if UnitIsQuestBoss and UnitIsQuestBoss("mouseover") then
+                isQuest = true
+            end
+            -- Friendly check
+            local canAttack = UnitCanAttack("player", "mouseover")
+            local isFriend = UnitIsFriend("player", "mouseover")
+            local isPlayer = UnitIsPlayer("mouseover")
+
+            if isQuest then
+                r, g, b, a = 1.00, 0.84, 0.27, 0.95   -- gold
+            elseif canAttack then
+                r, g, b, a = 1.00, 0.20, 0.20, 0.95   -- red
+            elseif isFriend then
+                if isPlayer then
+                    r, g, b, a = 0.30, 1.00, 0.30, 0.95   -- bright green for players
+                else
+                    r, g, b, a = 0.40, 0.95, 0.55, 0.85   -- soft green for friendly NPC
+                end
+            else
+                r, g, b, a = 1.00, 0.95, 0.30, 0.85   -- yellow neutral
+            end
+        end
+        self.ring:SetVertexColor(r, g, b, a)
+    end)
+
+    state.cursorHalo = F
+    F:Show()
+    return F
+end
+
+local function showCursorHalo()
+    if not state.cursorHalo then buildCursorHalo() end
+    state.cursorHalo:Show()
+    ResurgenceDB.cursorHalo = true
+end
+
+local function hideCursorHalo()
+    if state.cursorHalo then state.cursorHalo:Hide() end
+    ResurgenceDB.cursorHalo = false
 end
 
 ----------------------------------------------------------------------
@@ -2333,9 +2463,10 @@ handler:SetScript("OnEvent", function(_, event, name)
             ResurgenceDB.preferences.modules = ResurgenceDB.preferences.modules or {}
             ResurgenceDB.aurasEnabled   = ResurgenceDB.aurasEnabled   or {}
             ResurgenceDB.aurasDisabled  = ResurgenceDB.aurasDisabled  or {}
-            if ResurgenceDB.cleanMode == nil then ResurgenceDB.cleanMode = false end
-            if ResurgenceDB.xpBar     == nil then ResurgenceDB.xpBar     = true  end
-            if ResurgenceDB.chatSkin  == nil then ResurgenceDB.chatSkin  = false end
+            if ResurgenceDB.cleanMode  == nil then ResurgenceDB.cleanMode  = false end
+            if ResurgenceDB.xpBar      == nil then ResurgenceDB.xpBar      = true  end
+            if ResurgenceDB.chatSkin   == nil then ResurgenceDB.chatSkin   = false end
+            if ResurgenceDB.cursorHalo == nil then ResurgenceDB.cursorHalo = true  end
             ResurgenceDB.xpBarPos = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
         end
     elseif event == "PLAYER_LOGIN" then
@@ -2369,6 +2500,10 @@ handler:SetScript("OnEvent", function(_, event, name)
         -- Chat skin
         if ResurgenceDB.chatSkin then
             C_Timer.After(0.9, function() applyChatSkin(true) end)
+        end
+        -- Cursor halo
+        if ResurgenceDB.cursorHalo then
+            C_Timer.After(1.0, function() showCursorHalo() end)
         end
         -- First-launch onboarding wizard
         if not ResurgenceDB.setupDone then
