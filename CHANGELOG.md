@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4-alpha (2026-05-09)
+- Fix : action bar end-cap ornaments (the gargoyle / dragon decorations at the bottom of the screen) and the page number / nav arrows are now part of the fade list and disappear with Clean Mode.
+- Fix : cursor halo is now visible by default with a subtle cyan ring, vibrant red / green / gold tint on hover. Switched to a more reliable Blizzard texture (`TempleofKotmogu_ball_cyan` with ADD blend) for guaranteed rendering.
+- New : **Resurgence mini chat**. Bottom-left message log that mirrors the default chat stream and exposes its own edit box for slash commands. Functional even when Blizzard chat is hidden. Toggle in Settings, default on.
+- The default Blizzard `ChatFrame1` and its edit box are no longer hidden by Clean Mode (player still needs to type), only the docked extra chat tabs and channel buttons are.
+
 ## 0.5.3-alpha (2026-05-09)
 - Clean Mode now also fades every individual action button (`ActionButton1-12`, `MultiBarBottomLeftButton1-12`, `MultiBarLeftButton1-12`, etc., across 13 button groups, 130+ buttons total). The previous version only faded the parent bars, leaving the buttons drawn on top.
 - Added `TemporaryEnchantFrame` and edit-mode wrappers to the fade list.

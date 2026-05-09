@@ -861,16 +861,25 @@ local function buildSettingsContent(parent)
 
     local row4 = addToggleRow(row3, -12,
         "Cursor halo",
-        "A colored ring follows your cursor : red on enemies, green on allies, gold on quest objectives, yellow on neutral. The native cursor stays underneath for precision.",
+        "A colored ring follows your cursor : red on enemies, green on allies, gold on quest objectives, yellow on neutral. Subtle cyan halo by default, vibrant on hover.",
         function() return ResurgenceDB.cursorHalo end,
         function(v)
             if v then showCursorHalo() else hideCursorHalo() end
         end,
         C.gold)
 
+    local row5 = addToggleRow(row4, -12,
+        "Resurgence mini chat",
+        "A small Resurgence-styled message log at the bottom-left of your screen. Mirrors the default chat stream and lets you type slash commands directly.",
+        function() return ResurgenceDB.resChat end,
+        function(v)
+            if v then showResChat() else hideResChat() end
+        end,
+        C.gold)
+
     -- Launcher section (existing)
     local section = makeText(sc, "Launcher button", "GameFontNormalLarge", C.cyan)
-    section:SetPoint("TOPLEFT", row4, "BOTTOMLEFT", 0, -28)
+    section:SetPoint("TOPLEFT", row5, "BOTTOMLEFT", 0, -28)
 
     local desc = makeText(sc,
         "The circular Resurgence logo on your screen. Drag to move. Right click to hide for the session.",
@@ -1439,15 +1448,15 @@ local CLEAN_HIDE_TARGETS = {
     "QuickJoinToastButton",
     -- Vehicle seat indicator
     "VehicleSeatIndicator",
-    -- Chat frame and all its children (we'll do our own messaging eventually)
-    "ChatFrame1", "ChatFrame2", "ChatFrame3", "ChatFrame4", "ChatFrame5",
+    -- Chat clutter, but NOT the main chat frame and edit box (player needs
+    -- to be able to type /res and see addon messages).
+    "ChatFrame2", "ChatFrame3", "ChatFrame4", "ChatFrame5",
     "ChatFrame6", "ChatFrame7", "ChatFrame8", "ChatFrame9", "ChatFrame10",
     "ChatFrame1Tab", "ChatFrame2Tab", "ChatFrame3Tab", "ChatFrame4Tab",
     "ChatFrame1ButtonFrame", "ChatFrame2ButtonFrame",
     "ChatFrameMenuButton", "ChatFrameChannelButton",
     "ChatFrameToggleVoiceDeafenButton", "ChatFrameToggleVoiceMuteButton",
-    "GeneralDockManager", "ChatFrame1EditBox",
-    "QuickJoinRoleSelectionFrame",
+    "GeneralDockManager", "QuickJoinRoleSelectionFrame",
     -- World map button + tooltip clutter
     "MicroMenuContainer", "WorldMapFrame",
     -- Top right minor stuff
@@ -1465,6 +1474,13 @@ local CLEAN_FADE_TARGETS = {
     "StanceBar", "PetActionBar", "PossessActionBar", "OverrideActionBar",
     "ExtraActionBarFrame", "ZoneAbilityFrame",
     "MainMenuBarArtFrame", "StatusTrackingBarManager",
+    -- Action bar end-caps (the gargoyle / dragon ornaments at the bottom)
+    "MainMenuBarLeftEndCap", "MainMenuBarRightEndCap",
+    "MainMenuBarVehicleLeaveButton",
+    "MainMenuBarPageNumber",
+    "ActionBarUpButton", "ActionBarDownButton",
+    "MainMenuBarTexture0", "MainMenuBarTexture1",
+    "MainMenuBarTexture2", "MainMenuBarTexture3",
     -- Edit-mode wrappers
     "EditModeExpandedDragLayer", "EditModeManagerFrame",
     -- Temporary buffs and pet
@@ -1564,20 +1580,12 @@ local function buildCursorHalo()
     F:EnableMouse(false)
     F:Hide()
 
-    -- Outer halo ring
+    -- Outer halo ring (always visible, subtle by default, vibrant on hover)
     F.ring = F:CreateTexture(nil, "OVERLAY")
     F.ring:SetAllPoints()
-    F.ring:SetTexture("Interface\\COMMON\\GoldRing")
-    F.ring:SetVertexColor(0.7, 0.7, 0.8, 0)
-
-    -- Inner glow dot
-    F.dot = F:CreateTexture(nil, "OVERLAY")
-    F.dot:SetSize(14, 14)
-    F.dot:SetPoint("CENTER")
-    F.dot:SetTexture("Interface\\GLUES\\CharacterSelect\\Glues-AddOn-Icons")
-    F.dot:SetTexCoord(0, 1, 0, 1)
-    F.dot:SetBlendMode("ADD")
-    F.dot:SetAlpha(0)
+    F.ring:SetTexture("Interface\\Minimap\\TempleofKotmogu_ball_cyan")
+    F.ring:SetVertexColor(0.7, 0.85, 1.0, 0.55)
+    F.ring:SetBlendMode("ADD")
 
     F:SetScript("OnUpdate", function(self)
         local x, y = GetCursorPosition()
@@ -1586,30 +1594,28 @@ local function buildCursorHalo()
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 
-        local r, g, b, a = 0.7, 0.7, 0.8, 0
+        local r, g, b, a = 0.65, 0.80, 1.0, 0.55  -- subtle cyan default
         if UnitExists("mouseover") then
             local isQuest = false
-            -- Quest indicators : quest boss flag, or some quest objective
             if UnitIsQuestBoss and UnitIsQuestBoss("mouseover") then
                 isQuest = true
             end
-            -- Friendly check
             local canAttack = UnitCanAttack("player", "mouseover")
             local isFriend = UnitIsFriend("player", "mouseover")
             local isPlayer = UnitIsPlayer("mouseover")
 
             if isQuest then
-                r, g, b, a = 1.00, 0.84, 0.27, 0.95   -- gold
+                r, g, b, a = 1.00, 0.84, 0.27, 1.00   -- gold
             elseif canAttack then
-                r, g, b, a = 1.00, 0.20, 0.20, 0.95   -- red
+                r, g, b, a = 1.00, 0.20, 0.20, 1.00   -- red
             elseif isFriend then
                 if isPlayer then
-                    r, g, b, a = 0.30, 1.00, 0.30, 0.95   -- bright green for players
+                    r, g, b, a = 0.30, 1.00, 0.30, 1.00   -- bright green for players
                 else
-                    r, g, b, a = 0.40, 0.95, 0.55, 0.85   -- soft green for friendly NPC
+                    r, g, b, a = 0.40, 0.95, 0.55, 0.95   -- soft green for friendly NPC
                 end
             else
-                r, g, b, a = 1.00, 0.95, 0.30, 0.85   -- yellow neutral
+                r, g, b, a = 1.00, 0.95, 0.30, 0.95   -- yellow neutral
             end
         end
         self.ring:SetVertexColor(r, g, b, a)
@@ -1629,6 +1635,141 @@ end
 local function hideCursorHalo()
     if state.cursorHalo then state.cursorHalo:Hide() end
     ResurgenceDB.cursorHalo = false
+end
+
+----------------------------------------------------------------------
+-- RESURGENCE MINI CHAT
+-- A small Resurgence-styled message log that mirrors what gets printed
+-- to the default chat. Sits bottom-left of the screen, dark navy with
+-- gold accent, draggable. Lets the player see addon messages while the
+-- default chat is restyled or cluttered.
+----------------------------------------------------------------------
+local function buildResChat()
+    if state.resChat then return state.resChat end
+
+    local F = CreateFrame("Frame", nil, UIParent)
+    F:SetSize(420, 160)
+    F:SetPoint("BOTTOMLEFT", 16, 16)
+    F:SetMovable(true)
+    F:EnableMouse(true)
+    F:SetClampedToScreen(true)
+    F:SetFrameStrata("LOW")
+
+    local bg = F:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    setBG(bg, C.bgDeep)
+    bg:SetAlpha(0.78)
+
+    -- Bronze trim
+    makeBorderLine(F, C.bronze, 1, "TOP", 0)
+    makeBorderLine(F, C.bronze, 1, "BOTTOM", 0)
+    makeBorderLine(F, C.bronze, 1, "LEFT", 0)
+    makeBorderLine(F, C.bronze, 1, "RIGHT", 0)
+
+    -- Header
+    local header = F:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    header:SetPoint("TOPLEFT", 8, -4)
+    header:SetTextColor(rgb(C.gold))
+    header:SetText("RESURGENCE")
+
+    local hint = F:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("TOPRIGHT", -8, -4)
+    hint:SetTextColor(rgb(C.textFaint))
+    hint:SetText("drag · /res for menu")
+
+    -- Scrolling message frame (built-in WoW widget)
+    local msg = CreateFrame("ScrollingMessageFrame", nil, F)
+    msg:SetPoint("TOPLEFT", 8, -22)
+    msg:SetPoint("BOTTOMRIGHT", -8, 28)
+    msg:SetMaxLines(60)
+    msg:SetFontObject(ChatFontNormal)
+    msg:SetJustifyH("LEFT")
+    msg:SetFading(false)
+    msg:SetInsertMode("BOTTOM")
+
+    -- Edit box for slash commands
+    local edit = CreateFrame("EditBox", nil, F)
+    edit:SetSize(404, 22)
+    edit:SetPoint("BOTTOMLEFT", 8, 4)
+    edit:SetAutoFocus(false)
+    edit:SetFontObject(ChatFontNormal)
+    edit:SetTextColor(rgb(C.text))
+    local ebbg = edit:CreateTexture(nil, "BACKGROUND")
+    ebbg:SetAllPoints()
+    setBG(ebbg, C.bg)
+    ebbg:SetAlpha(0.85)
+    edit:SetScript("OnEscapePressed", function(self) self:ClearFocus(); self:SetText("") end)
+    edit:SetScript("OnEnterPressed", function(self)
+        local text = self:GetText() or ""
+        text = text:gsub("^%s+", ""):gsub("%s+$", "")
+        if #text > 0 then
+            -- If it starts with / route to chat command system, otherwise echo only
+            if text:sub(1, 1) == "/" then
+                local cmd, rest = text:match("^(/%S+)%s*(.*)$")
+                cmd = cmd or text
+                rest = rest or ""
+                local handler = SlashCmdList[(cmd:upper()):sub(2)]
+                -- WoW uses SLASH_NAME1/2 indexing : try to resolve via slash registry
+                local lcmd = cmd:lower()
+                local found = false
+                for k, v in pairs(SlashCmdList) do
+                    for i = 1, 10 do
+                        local s = _G["SLASH_" .. k .. i]
+                        if s and s:lower() == lcmd then
+                            v(rest)
+                            found = true
+                            break
+                        end
+                    end
+                    if found then break end
+                end
+                if not found then
+                    msg:AddMessage("|cffff5050[unknown slash : " .. cmd .. "]|r")
+                end
+            else
+                msg:AddMessage("|cff80c0ff[you]|r " .. text)
+            end
+        end
+        self:SetText("")
+        self:ClearFocus()
+    end)
+
+    F.msg = msg
+    F.edit = edit
+
+    -- Drag
+    F:RegisterForDrag("LeftButton")
+    F:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    F:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+
+    -- Hook ChatFrame1 message stream so our box mirrors the system feed.
+    if ChatFrame1 and not ChatFrame1._resChatHooked then
+        local origAdd = ChatFrame1.AddMessage
+        ChatFrame1.AddMessage = function(self, message, r, g, b, ...)
+            if message and msg then
+                msg:AddMessage(message, r or 1, g or 1, b or 1)
+            end
+            return origAdd(self, message, r, g, b, ...)
+        end
+        ChatFrame1._resChatHooked = true
+    end
+
+    -- Welcome line
+    msg:AddMessage("|cffffd200[Resurgence]|r mini chat ready. Type any slash command here.", 1, 1, 1)
+
+    state.resChat = F
+    return F
+end
+
+local function showResChat()
+    if not state.resChat then buildResChat() end
+    state.resChat:Show()
+    ResurgenceDB.resChat = true
+end
+
+local function hideResChat()
+    if state.resChat then state.resChat:Hide() end
+    ResurgenceDB.resChat = false
 end
 
 ----------------------------------------------------------------------
@@ -2467,6 +2608,7 @@ handler:SetScript("OnEvent", function(_, event, name)
             if ResurgenceDB.xpBar      == nil then ResurgenceDB.xpBar      = true  end
             if ResurgenceDB.chatSkin   == nil then ResurgenceDB.chatSkin   = false end
             if ResurgenceDB.cursorHalo == nil then ResurgenceDB.cursorHalo = true  end
+            if ResurgenceDB.resChat    == nil then ResurgenceDB.resChat    = true  end
             ResurgenceDB.xpBarPos = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
         end
     elseif event == "PLAYER_LOGIN" then
@@ -2504,6 +2646,10 @@ handler:SetScript("OnEvent", function(_, event, name)
         -- Cursor halo
         if ResurgenceDB.cursorHalo then
             C_Timer.After(1.0, function() showCursorHalo() end)
+        end
+        -- Resurgence mini chat
+        if ResurgenceDB.resChat then
+            C_Timer.After(1.1, function() showResChat() end)
         end
         -- First-launch onboarding wizard
         if not ResurgenceDB.setupDone then
