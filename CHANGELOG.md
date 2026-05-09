@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.2-alpha (2026-05-09)
+- Fix : `attempt to index field 'preferences' (a nil value)` crash on the wizard's step 2 when upgrading from a pre-v0.4.0 SavedVariables file. Defaults for `preferences`, `aurasEnabled / Disabled`, `aurasHudPos`, `buffsHudPos`, `setupDone`, `aurasHudLocked` now applied in `ADDON_LOADED` (after SavedVariables restore) plus defensive fallbacks in the wizard step builders.
+
 ## 0.4.1-alpha (2026-05-09)
 - Fix : the onboarding wizard opened with an empty black content area on first display. `renderStep()` was defined but never called at build time, so the first step only appeared after clicking Next.
 

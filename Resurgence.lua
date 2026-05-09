@@ -1549,11 +1549,18 @@ local function buildWizardStepRole(parent, refsOut)
         "GameFontNormal", C.textMuted)
     sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
 
+    -- Defensive : if the SavedVariables file pre-dates the v0.4.0 schema
+    -- the ADDON_LOADED handler may not have run yet (rare but possible
+    -- when the wizard is opened mid-load).
+    ResurgenceDB.preferences = ResurgenceDB.preferences or {}
+    ResurgenceDB.preferences.content = ResurgenceDB.preferences.content or {}
+    ResurgenceDB.preferences.modules = ResurgenceDB.preferences.modules or {}
+
     refsOut.role = ResurgenceDB.preferences.role
     refsOut.contentSelected = refsOut.contentSelected or {}
     -- Pre-init from saved
     for _, c in ipairs({ "mythic+", "raid", "pvp", "world" }) do
-        refsOut.contentSelected[c] = (ResurgenceDB.preferences.content and ResurgenceDB.preferences.content[c]) or false
+        refsOut.contentSelected[c] = ResurgenceDB.preferences.content[c] or false
     end
 
     local roles = {
@@ -1638,6 +1645,10 @@ local function buildWizardStepModules(parent, refsOut)
         "Enable what you want now. You can flip these any time from the Settings tab.",
         "GameFontNormal", C.textMuted)
     sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
+
+    -- Defensive guard against a stale SavedVariables schema
+    ResurgenceDB.preferences = ResurgenceDB.preferences or {}
+    ResurgenceDB.preferences.modules = ResurgenceDB.preferences.modules or {}
 
     refsOut.modules = refsOut.modules or {}
     -- Pre-init from saved or defaults (auras + buffs default ON)
@@ -1919,9 +1930,18 @@ handler:SetScript("OnEvent", function(_, event, name)
             ResurgenceDB = ResurgenceDB or {}
             if ResurgenceDB.welcomed       == nil then ResurgenceDB.welcomed       = false end
             if ResurgenceDB.launcherHidden == nil then ResurgenceDB.launcherHidden = false end
-            ResurgenceDB.launcherPos = ResurgenceDB.launcherPos or { "RIGHT", -8, 80 }
-            ResurgenceDB.windowPos   = ResurgenceDB.windowPos   or { "CENTER", 0, 40 }
-            ResurgenceDB.lastTab     = ResurgenceDB.lastTab     or "welcome"
+            if ResurgenceDB.setupDone      == nil then ResurgenceDB.setupDone      = false end
+            if ResurgenceDB.aurasHudLocked == nil then ResurgenceDB.aurasHudLocked = false end
+            ResurgenceDB.launcherPos    = ResurgenceDB.launcherPos    or { "RIGHT", -8, 80 }
+            ResurgenceDB.windowPos      = ResurgenceDB.windowPos      or { "CENTER", 0, 40 }
+            ResurgenceDB.lastTab        = ResurgenceDB.lastTab        or "welcome"
+            ResurgenceDB.buffsHudPos    = ResurgenceDB.buffsHudPos    or { "TOPRIGHT", -260, -260 }
+            ResurgenceDB.aurasHudPos    = ResurgenceDB.aurasHudPos    or { "CENTER", 0, -180 }
+            ResurgenceDB.preferences    = ResurgenceDB.preferences    or {}
+            ResurgenceDB.preferences.content = ResurgenceDB.preferences.content or {}
+            ResurgenceDB.preferences.modules = ResurgenceDB.preferences.modules or {}
+            ResurgenceDB.aurasEnabled   = ResurgenceDB.aurasEnabled   or {}
+            ResurgenceDB.aurasDisabled  = ResurgenceDB.aurasDisabled  or {}
         end
     elseif event == "PLAYER_LOGIN" then
         buildLauncher()
