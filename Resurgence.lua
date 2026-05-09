@@ -1850,31 +1850,19 @@ local function buildResChat()
         local text = self:GetText() or ""
         text = text:gsub("^%s+", ""):gsub("%s+$", "")
         if #text > 0 then
-            -- If it starts with / route to chat command system, otherwise echo only
+            -- If it starts with / hand off to Blizzard's macro parser which
+            -- knows every slash command (/reload, /target, /cast, /script,
+            -- and addon-registered ones). RunMacroText is hardware-event
+            -- safe because we are inside an OnEnterPressed callback.
             if text:sub(1, 1) == "/" then
-                local cmd, rest = text:match("^(/%S+)%s*(.*)$")
-                cmd = cmd or text
-                rest = rest or ""
-                local handler = SlashCmdList[(cmd:upper()):sub(2)]
-                -- WoW uses SLASH_NAME1/2 indexing : try to resolve via slash registry
-                local lcmd = cmd:lower()
-                local found = false
-                for k, v in pairs(SlashCmdList) do
-                    for i = 1, 10 do
-                        local s = _G["SLASH_" .. k .. i]
-                        if s and s:lower() == lcmd then
-                            v(rest)
-                            found = true
-                            break
-                        end
-                    end
-                    if found then break end
-                end
-                if not found then
-                    msg:AddMessage("|cffff5050[unknown slash : " .. cmd .. "]|r")
+                local ok, err = pcall(RunMacroText, text)
+                if not ok then
+                    msg:AddMessage("|cffff5050[error : " .. tostring(err) .. "]|r")
                 end
             else
-                msg:AddMessage("|cff80c0ff[you]|r " .. text)
+                -- Plain text : send to /say like the default Blizzard
+                -- chat does when you press Enter without a command.
+                pcall(RunMacroText, "/say " .. text)
             end
         end
         self:SetText("")
@@ -1909,15 +1897,36 @@ local function buildResChat()
     end
 
     -- Redirect the "Open Chat" keybind (Enter by default) to our edit box.
+    -- We replace the global ChatFrame_OpenChat outright (not hooksecurefunc)
+    -- because Blizzard's implementation tries to ChatEdit_ActivateChat()
+    -- the killed ChatFrame1EditBox first, which makes nothing visible.
+    -- Same with ChatFrame_OpenMenu and OPENCHATSLASH for /.
     if not state._resChatKeybindHooked then
-        if ChatFrame_OpenChat then
-            hooksecurefunc("ChatFrame_OpenChat", function(text)
-                if state.resChat and state.resChat.edit and state.resChat:IsShown() then
-                    if text and text ~= "" then state.resChat.edit:SetText(text) end
-                    state.resChat.edit:SetFocus()
-                end
-            end)
+        local origOpenChat = _G.ChatFrame_OpenChat
+        _G.ChatFrame_OpenChat = function(text, chatFrame)
+            if state.resChat and state.resChat.edit and state.resChat:IsShown() then
+                if text and text ~= "" then state.resChat.edit:SetText(text) end
+                state.resChat.edit:SetFocus()
+                return state.resChat.edit
+            end
+            if origOpenChat then return origOpenChat(text, chatFrame) end
         end
+
+        -- ChatEdit_ActivateChat is the lower-level focus call. Wrap it
+        -- so any path that ends up there also ends in our edit box.
+        if _G.ChatEdit_ActivateChat then
+            local origActivate = _G.ChatEdit_ActivateChat
+            _G.ChatEdit_ActivateChat = function(editBox)
+                if state.resChat and state.resChat.edit
+                   and state.resChat:IsShown()
+                   and editBox ~= state.resChat.edit then
+                    state.resChat.edit:SetFocus()
+                    return state.resChat.edit
+                end
+                return origActivate(editBox)
+            end
+        end
+
         state._resChatKeybindHooked = true
     end
 

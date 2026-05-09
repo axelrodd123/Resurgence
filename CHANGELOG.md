@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8-alpha (2026-05-09)
+- Fix : slash commands typed in the Resurgence mini chat (`/reload`, `/target`, `/cast`, `/res`, etc.) were returning "unknown slash". The hand-rolled `SlashCmdList` walker missed some 12.0.x retail registration paths. Replaced by `RunMacroText(text)` which is Blizzard's official macro / slash parser and knows every registered command including addon ones. Wrapped in `pcall` for safety.
+- Fix : pressing Enter outside the chat no longer opened the Resurgence edit box. The `hooksecurefunc` on `ChatFrame_OpenChat` was running after Blizzard's logic which had already failed against the killed `ChatFrame1EditBox`. Now `ChatFrame_OpenChat` is replaced outright, and `ChatEdit_ActivateChat` is also wrapped, so any code path that opens the chat ends up in our edit box.
+- Plain text typed in the mini chat now sends to `/say` (default Blizzard behavior) instead of just being echoed locally.
+
 ## 0.5.7-alpha (2026-05-09)
 - Fix : the default Blizzard chat edit box (`ChatFrame1EditBox`, the rounded gold-trimmed "Dire :" bar) was still appearing over the Resurgence mini chat when the player pressed Enter. Now killed outright : its `Show` method is replaced with a no-op, alpha 0, mouse and keyboard disabled, anchor moved off-screen. A 2-second ticker re-asserts the kill in case some Blizzard event path re-anchors it. Restored cleanly when the Resurgence chat is disabled in Settings.
 - New : the "Open Chat" keybind (Enter by default) now focuses the Resurgence edit box instead of opening the Blizzard one. Hooked via `ChatFrame_OpenChat`. Pre-typed text is forwarded.
