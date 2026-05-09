@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0-alpha (2026-05-09)
+- New : **Resurgence XP Bar** at the top of the screen. Custom gold gradient progress bar with the level, current XP / max, percentage, and a live time-to-ding estimate based on the XP rate over the last 30 minutes.
+- New : **Clean Mode**. One toggle hides Blizzard's quest tracker, default buffs and debuffs, talking head, zone enter banners, micro menu, default XP bar at the bottom, minimap zone label and clutter. Action bars and unit frames stay so you can still play. Toggle off anytime to bring everything back.
+- New : **Chat skin**. Re-styles the default chat frames with the Resurgence dark navy and gold trim. Functionality untouched, only visuals.
+- Settings tab gets a new "Resurgence UI replacement" section with checkboxes for the three above.
+- XP bar is draggable with `Ctrl + drag` to avoid accidental displacement during normal play.
+
 ## 0.4.2-alpha (2026-05-09)
 - Fix : `attempt to index field 'preferences' (a nil value)` crash on the wizard's step 2 when upgrading from a pre-v0.4.0 SavedVariables file. Defaults for `preferences`, `aurasEnabled / Disabled`, `aurasHudPos`, `buffsHudPos`, `setupDone`, `aurasHudLocked` now applied in `ADDON_LOADED` (after SavedVariables restore) plus defensive fallbacks in the wizard step builders.
 

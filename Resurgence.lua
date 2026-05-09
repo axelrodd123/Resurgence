@@ -51,6 +51,11 @@ ResurgenceDB.aurasEnabled   = ResurgenceDB.aurasEnabled or {} -- aura.id -> true
 ResurgenceDB.aurasDisabled  = ResurgenceDB.aurasDisabled or {} -- aura.id -> true if explicitly disabled
 ResurgenceDB.aurasHudPos    = ResurgenceDB.aurasHudPos or { "CENTER", 0, -180 }
 ResurgenceDB.aurasHudLocked = ResurgenceDB.aurasHudLocked or false
+ResurgenceDB.cleanMode      = ResurgenceDB.cleanMode or false
+ResurgenceDB.xpBar          = ResurgenceDB.xpBar
+if ResurgenceDB.xpBar == nil then ResurgenceDB.xpBar = true end
+ResurgenceDB.xpBarPos       = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
+ResurgenceDB.chatSkin       = ResurgenceDB.chatSkin or false
 
 ----------------------------------------------------------------------
 -- Tab definitions
@@ -776,29 +781,97 @@ local function buildSettingsContent(parent)
     local outer = makePanel(parent, { 0, 0, 0, 0 })
     outer:SetAllPoints()
 
-    local header = makeText(outer, "Settings", "GameFontNormalHuge", C.gold)
+    -- Scroll content (settings list grows with features)
+    local scroll = CreateFrame("ScrollFrame", nil, outer, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 4, -4)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 4)
+
+    local sc = CreateFrame("Frame", nil, scroll)
+    sc:SetSize(660, 1)
+    scroll:SetScrollChild(sc)
+
+    local header = makeText(sc, "Settings", "GameFontNormalHuge", C.gold)
     header:SetPoint("TOPLEFT", 24, -20)
 
-    local sub = makeText(outer,
-        "Module settings will appear here as features ship. The shell stage exposes only the launcher options.",
+    local sub = makeText(sc,
+        "Tune Resurgence to your liking. Features grow as modules ship.",
         "GameFontNormal", C.textMuted)
     sub:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
     sub:SetWidth(620)
     sub:SetJustifyH("LEFT")
 
-    -- Launcher section
-    local section = makeText(outer, "Launcher button", "GameFontNormalLarge", C.cyan)
-    section:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -28)
+    -- Helper for toggle rows
+    local function addToggleRow(anchor, yOff, title, descText, getter, setter, accent)
+        local row = makePanel(sc, C.panel)
+        row:SetHeight(56)
+        row:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff)
+        row:SetPoint("RIGHT", sc, "RIGHT", -8, 0)
+        makeBorderLine(row, accent or C.cyan, 2, "LEFT", 0)
 
-    local desc = makeText(outer,
-        "The circular Resurgence logo on your screen. Shift + drag to move it. Right click on it to hide for the session.",
+        local rt = makeText(row, title, "GameFontNormalLarge", accent or C.cyan)
+        rt:SetPoint("TOPLEFT", 14, -8)
+        local rd = makeText(row, descText, "GameFontHighlightSmall", C.text)
+        rd:SetPoint("TOPLEFT", rt, "BOTTOMLEFT", 0, -2)
+        rd:SetPoint("RIGHT", row, "RIGHT", -52, 0)
+        rd:SetJustifyH("LEFT")
+        rd:SetWordWrap(true)
+
+        local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        cb:SetSize(28, 28)
+        cb:SetPoint("RIGHT", -14, 0)
+        cb:SetChecked(getter())
+        cb:SetScript("OnClick", function(self_)
+            setter(self_:GetChecked() and true or false)
+        end)
+        return row, cb
+    end
+
+    -- Section : UI replacement
+    local visSection = makeText(sc, "Resurgence UI replacement", "GameFontNormalLarge", C.gold)
+    visSection:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -28)
+    local visSub = makeText(sc,
+        "Hide Blizzard's default clutter and replace key bits with Resurgence equivalents. Toggle anything off whenever you need the default behavior back.",
+        "GameFontDisableSmall", C.textMuted)
+    visSub:SetPoint("TOPLEFT", visSection, "BOTTOMLEFT", 0, -2)
+    visSub:SetWidth(620)
+    visSub:SetJustifyH("LEFT")
+
+    local row1 = addToggleRow(visSub, -12,
+        "Clean Mode",
+        "Hides Blizzard's quest tracker, default buffs, talking head, zone banners, micro menu, default XP bar, minimap clutter. Action bars and unit frames stay so you can still play.",
+        function() return ResurgenceDB.cleanMode end,
+        function(v) applyCleanMode(v) end,
+        C.gold)
+
+    local row2 = addToggleRow(row1, -12,
+        "Resurgence XP Bar",
+        "Custom XP bar at the top of your screen with live progress and a time-to-ding estimate based on the XP you've earned recently.",
+        function() return ResurgenceDB.xpBar end,
+        function(v)
+            if v then showXpBar() else hideXpBar() end
+        end,
+        C.gold)
+
+    local row3 = addToggleRow(row2, -12,
+        "Chat skin",
+        "Re-skins the default chat frames with the Resurgence dark navy and gold trim. Functionality stays untouched.",
+        function() return ResurgenceDB.chatSkin end,
+        function(v) applyChatSkin(v) end,
+        C.gold)
+
+    -- Launcher section (existing)
+    local section = makeText(sc, "Launcher button", "GameFontNormalLarge", C.cyan)
+    section:SetPoint("TOPLEFT", row3, "BOTTOMLEFT", 0, -28)
+
+    local desc = makeText(sc,
+        "The circular Resurgence logo on your screen. Drag to move. Right click to hide for the session.",
         "GameFontHighlight", C.text)
     desc:SetPoint("TOPLEFT", section, "BOTTOMLEFT", 0, -8)
     desc:SetWidth(620)
     desc:SetJustifyH("LEFT")
     desc:SetSpacing(3)
 
-    local btnReset = makeButton(outer, "Reset launcher position", 220, 30, C.gold)
+    local btnReset = makeButton(sc, "Reset launcher position", 220, 30, C.gold)
     btnReset:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
     btnReset:SetScript("OnClick", function()
         ResurgenceDB.launcherPos = { "RIGHT", -8, 80 }
@@ -809,7 +882,7 @@ local function buildSettingsContent(parent)
         print("|cffffd700[Resurgence]|r launcher position reset")
     end)
 
-    local btnToggle = makeButton(outer, "Show / Hide launcher", 220, 30, C.cyan)
+    local btnToggle = makeButton(sc, "Show / Hide launcher", 220, 30, C.cyan)
     btnToggle:SetPoint("LEFT", btnReset, "RIGHT", 12, 0)
     btnToggle:SetScript("OnClick", function()
         if not state.launcher then return end
@@ -823,21 +896,23 @@ local function buildSettingsContent(parent)
     end)
 
     -- Tutorial replay section
-    local section2 = makeText(outer, "Welcome message", "GameFontNormalLarge", C.cyan)
+    local section2 = makeText(sc, "Onboarding wizard", "GameFontNormalLarge", C.cyan)
     section2:SetPoint("TOPLEFT", btnReset, "BOTTOMLEFT", 0, -28)
 
-    local desc2 = makeText(outer,
-        "The first-launch popup is shown once per character. Replay it any time below.",
+    local desc2 = makeText(sc,
+        "The 3-step setup wizard runs once per character. Replay it any time below.",
         "GameFontHighlight", C.text)
     desc2:SetPoint("TOPLEFT", section2, "BOTTOMLEFT", 0, -8)
     desc2:SetWidth(620)
 
-    local btnReplay = makeButton(outer, "Replay welcome popup", 220, 30, C.gold)
+    local btnReplay = makeButton(sc, "Replay onboarding wizard", 220, 30, C.gold)
     btnReplay:SetPoint("TOPLEFT", desc2, "BOTTOMLEFT", 0, -16)
     btnReplay:SetScript("OnClick", function()
-        ResurgenceDB.welcomed = false
-        ResurgenceUI_ShowWelcome()
+        ResurgenceUI_StartSetup()
     end)
+
+    -- Set scroll content height
+    sc:SetHeight(720)
 
     return outer
 end
@@ -1165,6 +1240,253 @@ auraHandler:SetScript("OnEvent", function(_, event, unit)
     if not state.aurasHUD then buildAurasHUD() end
     refreshAurasHUD()
 end)
+
+----------------------------------------------------------------------
+-- XP BAR (top of screen, custom, with time-to-ding estimate)
+----------------------------------------------------------------------
+local xpSamples = {} -- { {time, xp}, ... } rolling window of last 30 minutes
+
+local function addXpSample(t, xp)
+    table.insert(xpSamples, { time = t, xp = xp })
+    while xpSamples[1] and xpSamples[1].time < t - 1800 do
+        table.remove(xpSamples, 1)
+    end
+end
+
+local function estimateXpRate()
+    if #xpSamples < 2 then return 0 end
+    local first = xpSamples[1]
+    local last = xpSamples[#xpSamples]
+    local dt = last.time - first.time
+    local dxp = last.xp - first.xp
+    if dt < 30 or dxp <= 0 then return 0 end
+    return dxp / dt -- xp per second
+end
+
+local function fmtBig(n)
+    if n >= 1e6 then return string.format("%.2fM", n / 1e6) end
+    if n >= 1e3 then return string.format("%.1fk", n / 1e3) end
+    return tostring(math.floor(n))
+end
+
+local function buildXpBar()
+    if state.xpBar then return state.xpBar end
+
+    local B = CreateFrame("Frame", nil, UIParent)
+    B:SetSize(640, 22)
+    local p = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
+    B:SetPoint(p[1] or "TOP", UIParent, p[1] or "TOP", p[2] or 0, p[3] or -8)
+    B:SetMovable(true)
+    B:EnableMouse(false)
+    B:SetClampedToScreen(true)
+    B:SetFrameStrata("HIGH")
+
+    local bg = B:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    setBG(bg, C.bgDeep)
+
+    -- Bronze border
+    makeBorderLine(B, C.bronze, 1, "TOP", 0)
+    makeBorderLine(B, C.bronze, 1, "BOTTOM", 0)
+    makeBorderLine(B, C.bronze, 1, "LEFT", 0)
+    makeBorderLine(B, C.bronze, 1, "RIGHT", 0)
+
+    local fill = CreateFrame("StatusBar", nil, B)
+    fill:SetPoint("TOPLEFT", 1, -1)
+    fill:SetPoint("BOTTOMRIGHT", -1, 1)
+    fill:SetMinMaxValues(0, 1)
+    fill:SetValue(0)
+    local barTex = fill:CreateTexture(nil, "ARTWORK")
+    barTex:SetColorTexture(rgb(C.gold))
+    barTex:SetAlpha(0.55)
+    fill:SetStatusBarTexture(barTex)
+    B.fill = fill
+
+    -- Subtle stripe overlay over the fill for premium feel
+    local stripe = fill:CreateTexture(nil, "OVERLAY")
+    stripe:SetAllPoints()
+    stripe:SetColorTexture(1, 1, 1, 0.05)
+
+    local label = B:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("CENTER")
+    label:SetTextColor(rgb(C.text))
+    label:SetText("Lv ?  ·  -- / --")
+    B.label = label
+
+    -- Drag (only when CTRL is held to avoid accidents)
+    B:RegisterForDrag("LeftButton")
+    B:SetScript("OnDragStart", function(self)
+        if IsControlKeyDown() then self:StartMoving() end
+    end)
+    B:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local p1, _, _, x, y = self:GetPoint()
+        ResurgenceDB.xpBarPos = { p1, x, y }
+    end)
+
+    function B:UpdateNow()
+        local lvl = UnitLevel("player") or 0
+        local cur = UnitXP("player") or 0
+        local mx  = UnitXPMax("player") or 1
+
+        local maxLevel = (GetMaxLevelForExpansionLevel and GetMaxLevelForExpansionLevel(GetExpansionLevel and GetExpansionLevel() or 0)) or 80
+        if mx == 0 or cur == 0 and lvl >= maxLevel then
+            self.fill:SetValue(0)
+            self.label:SetText(string.format("Lv %d  ·  Max level", lvl))
+            return
+        end
+
+        addXpSample(GetTime(), cur)
+
+        local pct = mx > 0 and (cur / mx) or 0
+        self.fill:SetValue(pct)
+
+        local rate = estimateXpRate() -- xp/sec
+        local etaText = ""
+        if rate > 0 and cur < mx then
+            local remaining = mx - cur
+            local etaSec = remaining / rate
+            local etaMin = etaSec / 60
+            if etaMin < 1 then
+                etaText = string.format("  ·  <1m to ding")
+            elseif etaMin < 60 then
+                etaText = string.format("  ·  %dm to ding", math.floor(etaMin))
+            else
+                etaText = string.format("  ·  %dh %02dm to ding",
+                    math.floor(etaMin / 60), math.floor(etaMin) % 60)
+            end
+        end
+
+        self.label:SetText(string.format(
+            "|cffffd200Lv %d|r  ·  %s / %s  (%.1f%%)%s",
+            lvl, fmtBig(cur), fmtBig(mx), pct * 100, etaText))
+    end
+
+    -- Throttle update : every 1 sec
+    local acc = 0
+    B:SetScript("OnUpdate", function(self, elapsed)
+        acc = acc + elapsed
+        if acc < 1.0 then return end
+        acc = 0
+        self:UpdateNow()
+    end)
+
+    state.xpBar = B
+    B:UpdateNow()
+    return B
+end
+
+local function showXpBar()
+    if not state.xpBar then buildXpBar() end
+    state.xpBar:Show()
+    ResurgenceDB.xpBar = true
+end
+
+local function hideXpBar()
+    if state.xpBar then state.xpBar:Hide() end
+    ResurgenceDB.xpBar = false
+end
+
+----------------------------------------------------------------------
+-- CLEAN MODE (hide Blizzard clutter so Resurgence's footprint is visible)
+----------------------------------------------------------------------
+local CLEAN_TARGETS = {
+    "ObjectiveTrackerFrame",
+    "BuffFrame",
+    "DebuffFrame",
+    "TalkingHeadFrame",
+    "ZoneTextFrame",
+    "SubZoneTextFrame",
+    "PVPArenaTextFrame",
+    "StatusTrackingBarManager",
+    "TimeManagerClockButton",
+    "MinimapZoneTextButton",
+    "MinimapNorthTag",
+    "MicroMenuContainer",
+}
+local cleanOriginalShow = {}
+
+local function applyCleanMode(on)
+    for _, name in ipairs(CLEAN_TARGETS) do
+        local f = _G[name]
+        if f then
+            if on then
+                if not cleanOriginalShow[name] then
+                    cleanOriginalShow[name] = f.Show
+                    f.Show = function() end -- neutralize Blizzard auto-show
+                end
+                if f.UnregisterAllEvents and f.RegisterEvent then
+                    -- only unregister for hideable, non-secure frames
+                    pcall(function() f:UnregisterAllEvents() end)
+                end
+                pcall(function() f:Hide() end)
+            else
+                if cleanOriginalShow[name] then
+                    f.Show = cleanOriginalShow[name]
+                    cleanOriginalShow[name] = nil
+                end
+                pcall(function() f:Show() end)
+            end
+        end
+    end
+    ResurgenceDB.cleanMode = on
+end
+
+----------------------------------------------------------------------
+-- CHAT SKIN (re-styles existing chat frames without breaking them)
+----------------------------------------------------------------------
+local chatSkinned = false
+
+local function applyChatSkin(on)
+    -- Iterate all default chat frames (ChatFrame1 through 10).
+    for i = 1, NUM_CHAT_WINDOWS or 10 do
+        local cf = _G["ChatFrame" .. i]
+        if cf then
+            local edit = _G["ChatFrame" .. i .. "EditBox"]
+            local tab  = _G["ChatFrame" .. i .. "Tab"]
+            if on then
+                -- Reskin background
+                if not cf._resSkin then
+                    local bg = cf:CreateTexture(nil, "BACKGROUND")
+                    bg:SetAllPoints()
+                    setBG(bg, C.bgDeep)
+                    bg:SetAlpha(0.85)
+                    cf._resSkinBg = bg
+                    cf._resSkin = true
+                else
+                    if cf._resSkinBg then cf._resSkinBg:Show() end
+                end
+                -- Restyle edit box
+                if edit then
+                    if not edit._resSkin then
+                        local ebbg = edit:CreateTexture(nil, "BACKGROUND")
+                        ebbg:SetAllPoints()
+                        setBG(ebbg, C.bg)
+                        ebbg:SetAlpha(0.92)
+                        edit._resSkinBg = ebbg
+                        local top   = edit:CreateTexture(nil, "OVERLAY")
+                        setBG(top, C.gold)
+                        top:SetHeight(1)
+                        top:SetPoint("TOPLEFT", 4, 0)
+                        top:SetPoint("TOPRIGHT", -4, 0)
+                        top:SetAlpha(0.6)
+                        edit._resSkinLine = top
+                        edit._resSkin = true
+                    else
+                        if edit._resSkinBg then edit._resSkinBg:Show() end
+                        if edit._resSkinLine then edit._resSkinLine:Show() end
+                    end
+                end
+            else
+                if cf._resSkinBg then cf._resSkinBg:Hide() end
+                if edit and edit._resSkinBg then edit._resSkinBg:Hide() end
+                if edit and edit._resSkinLine then edit._resSkinLine:Hide() end
+            end
+        end
+    end
+    chatSkinned = on
+    ResurgenceDB.chatSkin = on
+end
 
 ----------------------------------------------------------------------
 -- Auras tab content
@@ -1942,6 +2264,10 @@ handler:SetScript("OnEvent", function(_, event, name)
             ResurgenceDB.preferences.modules = ResurgenceDB.preferences.modules or {}
             ResurgenceDB.aurasEnabled   = ResurgenceDB.aurasEnabled   or {}
             ResurgenceDB.aurasDisabled  = ResurgenceDB.aurasDisabled  or {}
+            if ResurgenceDB.cleanMode == nil then ResurgenceDB.cleanMode = false end
+            if ResurgenceDB.xpBar     == nil then ResurgenceDB.xpBar     = true  end
+            if ResurgenceDB.chatSkin  == nil then ResurgenceDB.chatSkin  = false end
+            ResurgenceDB.xpBarPos = ResurgenceDB.xpBarPos or { "TOP", 0, -8 }
         end
     elseif event == "PLAYER_LOGIN" then
         buildLauncher()
@@ -1954,6 +2280,18 @@ handler:SetScript("OnEvent", function(_, event, name)
                 buildAurasHUD()
                 refreshAurasHUD()
             end)
+        end
+        -- XP bar
+        if ResurgenceDB.xpBar then
+            C_Timer.After(0.7, function() showXpBar() end)
+        end
+        -- Clean Mode
+        if ResurgenceDB.cleanMode then
+            C_Timer.After(0.8, function() applyCleanMode(true) end)
+        end
+        -- Chat skin
+        if ResurgenceDB.chatSkin then
+            C_Timer.After(0.9, function() applyChatSkin(true) end)
         end
         -- First-launch onboarding wizard
         if not ResurgenceDB.setupDone then
