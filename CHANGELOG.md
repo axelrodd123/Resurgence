@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.5-alpha (2026-05-09)
+- Fix : the default `ChatFrame1` no longer overlaps the Resurgence mini chat. It is now faded to alpha 0 in Clean Mode (still receives messages so our hooked `AddMessage` mirrors them), instead of being left visible.
+- Fix : the gargoyle / dragon ornament on the right side of the action bar (with the page number and up / down arrows) was rendering through the previous fade pass. Two new layers catch it : a nested-children pass (`MainMenuBar.EndCaps`, `MainMenuBar.BorderArt`, `MainMenuBar.ActionBarPageNumber`, etc., which are not exposed as Lua globals in 12.0.x retail) and a brute-force walk of every region and child of `MainMenuBar` that fades anything not already handled.
+- The Resurgence mini chat is now the sole visible message log when Clean Mode is on. Slash commands typed in its edit box still route through `SlashCmdList`.
+
 ## 0.5.4-alpha (2026-05-09)
 - Fix : action bar end-cap ornaments (the gargoyle / dragon decorations at the bottom of the screen) and the page number / nav arrows are now part of the fade list and disappear with Clean Mode.
 - Fix : cursor halo is now visible by default with a subtle cyan ring, vibrant red / green / gold tint on hover. Switched to a more reliable Blizzard texture (`TempleofKotmogu_ball_cyan` with ADD blend) for guaranteed rendering.

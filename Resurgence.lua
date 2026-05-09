@@ -1448,12 +1448,13 @@ local CLEAN_HIDE_TARGETS = {
     "QuickJoinToastButton",
     -- Vehicle seat indicator
     "VehicleSeatIndicator",
-    -- Chat clutter, but NOT the main chat frame and edit box (player needs
-    -- to be able to type /res and see addon messages).
+    -- Chat clutter (extra docked tabs and channel buttons). ChatFrame1 itself
+    -- is faded (not hidden) so its message stream still feeds our hooked
+    -- AddMessage that mirrors into the Resurgence mini chat.
     "ChatFrame2", "ChatFrame3", "ChatFrame4", "ChatFrame5",
     "ChatFrame6", "ChatFrame7", "ChatFrame8", "ChatFrame9", "ChatFrame10",
-    "ChatFrame1Tab", "ChatFrame2Tab", "ChatFrame3Tab", "ChatFrame4Tab",
-    "ChatFrame1ButtonFrame", "ChatFrame2ButtonFrame",
+    "ChatFrame2Tab", "ChatFrame3Tab", "ChatFrame4Tab",
+    "ChatFrame2ButtonFrame",
     "ChatFrameMenuButton", "ChatFrameChannelButton",
     "ChatFrameToggleVoiceDeafenButton", "ChatFrameToggleVoiceMuteButton",
     "GeneralDockManager", "QuickJoinRoleSelectionFrame",
@@ -1485,6 +1486,22 @@ local CLEAN_FADE_TARGETS = {
     "EditModeExpandedDragLayer", "EditModeManagerFrame",
     -- Temporary buffs and pet
     "TemporaryEnchantFrame",
+    -- Default chat (we mirror its stream into our mini chat, alpha 0 keeps
+    -- the engine alive but pulls the visual off screen so it does not
+    -- overlap the Resurgence chat)
+    "ChatFrame1", "ChatFrame1EditBox",
+    "ChatFrame1ButtonFrame", "ChatFrame1Tab",
+}
+
+-- Nested children of MainMenuBar that 12.0.x retail uses for the bottom
+-- ornaments (gargoyle / dragon end caps, page selector, art textures).
+-- These are NOT exposed as globals but are accessible as `.ChildName` on
+-- the parent frame.
+local CLEAN_FADE_NESTED = {
+    { parent = "MainMenuBar",        children = { "EndCaps", "BorderArt", "ActionBarPageNumber", "QuickKeybindButton" } },
+    { parent = "MainMenuBarArtFrame",children = { "LeftEndCap", "RightEndCap", "PageNumber", "PageNumberFrame" } },
+    { parent = "StanceBar",          children = { "ArtFrame" } },
+    { parent = "PetActionBar",       children = { "ArtFrame" } },
 }
 
 -- Individual button collections (action buttons render even when their
@@ -1558,6 +1575,59 @@ local function applyCleanMode(on)
                 else
                     pcall(function() b:SetAlpha(1) end)
                     pcall(function() b:EnableMouse(true) end)
+                end
+            end
+        end
+    end
+    -- Nested children of action bar containers (12.0.x retail uses
+    -- MainMenuBar.EndCaps etc which are not exposed as globals).
+    for _, entry in ipairs(CLEAN_FADE_NESTED) do
+        local parent = _G[entry.parent]
+        if parent then
+            for _, childName in ipairs(entry.children) do
+                local c = parent[childName]
+                if c then
+                    if on then
+                        pcall(function() c:SetAlpha(0) end)
+                        if c.EnableMouse then pcall(function() c:EnableMouse(false) end) end
+                        if c.Hide then pcall(function() c:Hide() end) end
+                    else
+                        if c.Show then pcall(function() c:Show() end) end
+                        pcall(function() c:SetAlpha(1) end)
+                        if c.EnableMouse then pcall(function() c:EnableMouse(true) end) end
+                    end
+                end
+            end
+        end
+    end
+    -- Brute-force pass : walk MainMenuBar's region children and fade any
+    -- texture / frame whose name suggests it's an art / ornament piece.
+    -- This catches any leftover end-cap / page-number that the explicit
+    -- list missed in this client version.
+    if MainMenuBar then
+        local regions = { MainMenuBar:GetRegions() }
+        for _, r in ipairs(regions) do
+            if r and r.SetAlpha then
+                if on then
+                    pcall(function() r:SetAlpha(0) end)
+                else
+                    pcall(function() r:SetAlpha(1) end)
+                end
+            end
+        end
+        local kids = { MainMenuBar:GetChildren() }
+        for _, k in ipairs(kids) do
+            if k and k.SetAlpha then
+                local n = k.GetName and k:GetName() or ""
+                -- Don't touch the action button parents (already handled)
+                if not (n:find("ActionButton") or n:find("MultiBar")) then
+                    if on then
+                        pcall(function() k:SetAlpha(0) end)
+                        if k.EnableMouse then pcall(function() k:EnableMouse(false) end) end
+                    else
+                        pcall(function() k:SetAlpha(1) end)
+                        if k.EnableMouse then pcall(function() k:EnableMouse(true) end) end
+                    end
                 end
             end
         end
