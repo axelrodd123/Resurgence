@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0-alpha (2026-05-09)
+- New : 3-step onboarding wizard at first launch (welcome / role + content / modules) that personalizes the addon to the player.
+- New : Aura Engine. 39 hand-picked procs and active buffs across all 13 classes. Auto-filtered by player class. Floating panel with cooldown sweep and Blizzard-native countdown numbers. Position persisted, lockable.
+- New : Auras tab in the main window. Per-aura toggle checkboxes, refresh button, lock / unlock and reset position controls.
+- New : `/res setup` re-runs the wizard. `/res auras` opens the Auras tab directly.
+- The aura HUD only loads when the Personal Auras module is enabled in the wizard or Settings, keeping the addon footprint zero for users who only want the World Buffs HUD.
+
 ## 0.3.0-alpha
 - New module : **World Buffs**. A floating HUD with every currently-active world event, live countdowns ticking by the second, location label, and a per-event Track button.
 - Tracking integrates with the in-game native waypoint system : click Track and follow the 3D arrow at the top of your screen (it tilts up or down based on the target's altitude) plus the line drawn on the world map. Zero custom navigation code, all native Blizzard.
