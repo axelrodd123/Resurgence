@@ -1860,6 +1860,10 @@ local function buildOnboardingWizard()
         P:Hide()
     end)
 
+    -- Render the first step now (otherwise the content area is empty until
+    -- the user clicks Next, which is the bug we just shipped).
+    renderStep()
+
     state.welcomePopup = P
     return P
 end

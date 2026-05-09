@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1-alpha (2026-05-09)
+- Fix : the onboarding wizard opened with an empty black content area on first display. `renderStep()` was defined but never called at build time, so the first step only appeared after clicking Next.
+
 ## 0.4.0-alpha (2026-05-09)
 - New : 3-step onboarding wizard at first launch (welcome / role + content / modules) that personalizes the addon to the player.
 - New : Aura Engine. 39 hand-picked procs and active buffs across all 13 classes. Auto-filtered by player class. Floating panel with cooldown sweep and Blizzard-native countdown numbers. Position persisted, lockable.
