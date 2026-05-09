@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-alpha
+- New module : **World Buffs**. A floating HUD with every currently-active world event, live countdowns ticking by the second, location label, and a per-event Track button.
+- Tracking integrates with the in-game native waypoint system : click Track and follow the 3D arrow at the top of your screen (it tilts up or down based on the target's altitude) plus the line drawn on the world map. Zero custom navigation code, all native Blizzard.
+- New tab `World Buffs` in the main menu, with the full event list and HUD toggle buttons.
+- New slash : `/res buffs` (toggle), `/res buffs show`, `/res buffs hide`.
+- HUD is movable, lockable, position persisted across sessions, can be shown automatically on next login.
+- 7 events shipped : Battlegrounds Bonus, Trial of Style, Vyranoth's Echo (world boss), Winds of Wisdom, Pet Battle Bonus, Darkmoon Faire, Mythic Dungeon Event.
+
 ## 0.2.3-alpha
 - New logo : transparent-background circular asset, no mask texture required at runtime, sharper edges and smoother rim glow.
 - Removed the runtime alpha mask code now that the source is already a perfect circle.

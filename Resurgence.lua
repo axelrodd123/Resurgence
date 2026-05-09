@@ -42,12 +42,16 @@ ResurgenceDB.launcherPos    = ResurgenceDB.launcherPos or { "RIGHT", -8, 80 }
 ResurgenceDB.launcherHidden = ResurgenceDB.launcherHidden or false
 ResurgenceDB.windowPos      = ResurgenceDB.windowPos or { "CENTER", 0, 40 }
 ResurgenceDB.lastTab        = ResurgenceDB.lastTab or "welcome"
+ResurgenceDB.buffsHudPos    = ResurgenceDB.buffsHudPos or { "TOPRIGHT", -260, -260 }
+ResurgenceDB.buffsHudOpen   = ResurgenceDB.buffsHudOpen or false
+ResurgenceDB.buffsHudLocked = ResurgenceDB.buffsHudLocked or false
 
 ----------------------------------------------------------------------
 -- Tab definitions
 ----------------------------------------------------------------------
 local TABS = {
     { id = "welcome",  label = "Welcome" },
+    { id = "buffs",    label = "World Buffs" },
     { id = "roadmap",  label = "Roadmap" },
     { id = "about",    label = "About" },
     { id = "settings", label = "Settings" },
@@ -59,20 +63,31 @@ local TABS = {
 ----------------------------------------------------------------------
 local ROADMAP = {
     {
-        ver = "0.2.0-alpha", status = "current",
+        ver = "0.2.x", status = "shipped",
         title = "UI Shell",
-        body = "The visual foundation : welcome screen, on-screen launcher, roadmap and info tabs. The brand and design system ship first; the engine ships next.",
+        body = "The visual foundation : welcome screen, on-screen launcher, roadmap and info tabs. Shipped.",
         items = {
             "Welcome window with onboarding flow",
-            "Draggable on-screen launcher button",
+            "Draggable circular launcher button",
             "Roadmap, About, Support, Settings tabs",
             "Persistent positions and preferences",
         },
     },
     {
-        ver = "0.3.0", status = "planned",
+        ver = "0.3.0-alpha", status = "current",
+        title = "World Buffs",
+        body = "Live countdowns for every active world event in one floating window. One click takes you there with the in-game native 3D arrow that tilts up or down depending on the target's altitude.",
+        items = {
+            "Floating HUD with active events and live countdowns",
+            "Per-event Track button : sets a Blizzard waypoint, line on the map, 3D arrow that adapts in real time",
+            "Toggle from launcher menu, slash command, or in-app tab",
+            "Movable, lockable, position persisted",
+        },
+    },
+    {
+        ver = "0.4.0", status = "planned",
         title = "Aura Engine",
-        body = "The core promise. Track the procs and buffs that actually matter to your spec, with the visual polish your gameplay deserves.",
+        body = "Track the procs and buffs that actually matter to your spec, with the visual polish your gameplay deserves.",
         items = {
             "Curated proc and buff library, hand-picked per spec",
             "Glow border, cooldown sweep, countdown numbers",
@@ -81,7 +96,7 @@ local ROADMAP = {
         },
     },
     {
-        ver = "0.4.0", status = "planned",
+        ver = "0.5.0", status = "planned",
         title = "Group Awareness",
         body = "Real-time visibility on the cooldowns of every player in your group, in one unified panel that respects your class roles.",
         items = {
@@ -91,7 +106,7 @@ local ROADMAP = {
         },
     },
     {
-        ver = "0.5.0", status = "planned",
+        ver = "0.6.0", status = "planned",
         title = "Combat Insights",
         body = "Live damage, healing, threat, and top-spell metrics that read at a glance. Built for the encounter, not the spreadsheet.",
         items = {
@@ -101,7 +116,7 @@ local ROADMAP = {
         },
     },
     {
-        ver = "0.6.0", status = "future",
+        ver = "0.7.0", status = "future",
         title = "Vault & Lockout Tracker",
         body = "Cross-character vault progress, weekly lockouts, currency caps. Visible without alt-tabbing.",
         items = {
@@ -113,25 +128,134 @@ local ROADMAP = {
     {
         ver = "1.0.0", status = "future",
         title = "Custom Trigger Editor",
-        body = "For power users who used to write their own WAs. A focused, opinionated editor without the legacy bloat.",
+        body = "For power users who want to define their own triggers. A focused, opinionated editor without the legacy bloat.",
         items = {
             "Visual trigger builder",
-            "Import / export aura strings",
+            "Import / export trigger strings",
             "Community trigger library",
         },
     },
 }
 
 local STATUS_COLORS = {
+    shipped = C.accentGreen,
     current = C.cyan,
     planned = C.gold,
     future  = C.textFaint,
 }
 local STATUS_LABELS = {
+    shipped = "DONE",
     current = "NOW",
     planned = "NEXT",
     future  = "LATER",
 }
+
+----------------------------------------------------------------------
+-- World Buffs : curated active events with countdowns and waypoints
+----------------------------------------------------------------------
+-- endsAt is a relative offset from the moment the addon loads, in seconds.
+-- In a real Blizzard-calendar-driven build (v0.3.1+) these timestamps
+-- come live from the in-game calendar API. For this alpha they are
+-- realistic placeholders so the live countdown ticks immediately.
+local function inDays(d) return d * 86400 end
+
+local WORLD_BUFFS = {
+    {
+        id = "bg_bonus",
+        name = "Battlegrounds Bonus Event",
+        desc = "+50% Honor from BG objectives.",
+        icon = 132355,
+        endsAt = inDays(3) + 8 * 3600,
+        location = "Active globally",
+    },
+    {
+        id = "trial_of_style",
+        name = "Trial of Style",
+        desc = "Show off your transmog for a week.",
+        icon = 1392952,
+        endsAt = inDays(5),
+        location = "Stormwind, Trial entrance",
+        waypoint = { mapID = 84, x = 0.4824, y = 0.6622 },
+    },
+    {
+        id = "world_boss_1",
+        name = "Vyranoth's Echo",
+        desc = "World boss, drops 645 ilvl loot.",
+        icon = 134155,
+        endsAt = inDays(2) + 12 * 3600,
+        location = "Emerald Dream",
+        waypoint = { mapID = 2200, x = 0.50, y = 0.50 },
+    },
+    {
+        id = "winds_of_wisdom",
+        name = "Winds of Wisdom",
+        desc = "+50% experience gain on character leveling.",
+        icon = 1764109,
+        endsAt = inDays(20),
+        location = "Active globally",
+    },
+    {
+        id = "pet_battle_bonus",
+        name = "Pet Battle Bonus",
+        desc = "+200% Pet Battle XP from wins.",
+        icon = 132440,
+        endsAt = inDays(6) + 4 * 3600,
+        location = "Active globally",
+    },
+    {
+        id = "darkmoon",
+        name = "Darkmoon Faire",
+        desc = "Once-monthly faire, profession quests, mounts, pets.",
+        icon = 134419,
+        endsAt = inDays(4),
+        location = "Mulgore portal entrance",
+        waypoint = { mapID = 7, x = 0.45, y = 0.66 },
+    },
+    {
+        id = "mythic_dungeon",
+        name = "Mythic Dungeon Event",
+        desc = "Bonus rewards from completed Mythic dungeons.",
+        icon = 1444938,
+        endsAt = inDays(11) + 6 * 3600,
+        location = "Active globally",
+    },
+}
+
+-- Resolve absolute end times relative to the moment the addon loads.
+local LOAD_TIME = GetTime()
+for _, b in ipairs(WORLD_BUFFS) do
+    b.endsAtAbsolute = LOAD_TIME + b.endsAt
+end
+
+local function formatCountdown(seconds)
+    if seconds <= 0 then return "ended" end
+    local d = math.floor(seconds / 86400)
+    local h = math.floor((seconds % 86400) / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = math.floor(seconds % 60)
+    if d > 0 then return string.format("%dd %dh %dm", d, h, m) end
+    if h > 0 then return string.format("%dh %dm %ds", h, m, s) end
+    if m > 0 then return string.format("%dm %ds", m, s) end
+    return string.format("%ds", s)
+end
+
+local function trackWaypoint(buff)
+    if not buff.waypoint then
+        print(string.format("|cffffd700[Resurgence]|r %s is active globally — no specific location to track.", buff.name))
+        return
+    end
+    if not (C_Map and C_Map.SetUserWaypoint and UiMapPoint) then
+        print("|cffff8888[Resurgence]|r waypoint API unavailable on this client.")
+        return
+    end
+    local w = buff.waypoint
+    local point = UiMapPoint.CreateFromCoordinates(w.mapID, w.x, w.y, w.z or 0)
+    C_Map.SetUserWaypoint(point)
+    if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then
+        C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+    end
+    print(string.format("|cffffd700[Resurgence]|r tracking : %s — follow the in-game arrow.", buff.name))
+end
 
 ----------------------------------------------------------------------
 -- State
@@ -140,6 +264,8 @@ local state = {
     launcher = nil,
     window = nil,
     welcomePopup = nil,
+    buffsHUD = nil,
+    buffsHUDRows = {},
     tabButtons = {},
     tabPanels = {},
     activeTab = nil,
@@ -288,6 +414,191 @@ local function buildLauncher()
 
     state.launcher = L
     return L
+end
+
+----------------------------------------------------------------------
+-- World Buffs HUD (floating draggable window)
+----------------------------------------------------------------------
+local function buildBuffsHUD()
+    if state.buffsHUD then return state.buffsHUD end
+
+    local F = CreateFrame("Frame", nil, UIParent)
+    F:SetSize(320, 480)
+    F:SetMovable(true)
+    F:EnableMouse(true)
+    F:SetClampedToScreen(true)
+    F:SetFrameStrata("MEDIUM")
+    F:Hide()
+
+    local p = ResurgenceDB.buffsHudPos or { "TOPRIGHT", -260, -260 }
+    F:SetPoint(p[1] or "TOPRIGHT", UIParent, p[1] or "TOPRIGHT", p[2] or -260, p[3] or -260)
+
+    -- Outer + inner
+    local bg = F:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    setBG(bg, C.bgDeep)
+    local inner = makePanel(F, C.bg)
+    inner:SetPoint("TOPLEFT", 2, -2)
+    inner:SetPoint("BOTTOMRIGHT", -2, 2)
+    makeBorderLine(F, C.bronze, 1, "TOP", 0)
+    makeBorderLine(F, C.bronze, 1, "BOTTOM", 0)
+    makeBorderLine(F, C.bronze, 1, "LEFT", 0)
+    makeBorderLine(F, C.bronze, 1, "RIGHT", 0)
+
+    -- Header
+    local header = makePanel(inner, C.bgDeep)
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", 0, 0)
+    header:SetHeight(40)
+
+    local title = makeText(header, "World Buffs", "GameFontNormalLarge", C.gold)
+    title:SetPoint("LEFT", 12, 0)
+
+    local goldLine = inner:CreateTexture(nil, "OVERLAY")
+    setBG(goldLine, C.gold)
+    goldLine:SetHeight(1)
+    goldLine:SetPoint("LEFT", 8, 0)
+    goldLine:SetPoint("RIGHT", -8, 0)
+    goldLine:SetPoint("TOP", inner, "TOP", 0, -40)
+    goldLine:SetAlpha(0.5)
+
+    -- Close button
+    F.close = CreateFrame("Button", nil, header, "UIPanelCloseButton")
+    F.close:SetPoint("TOPRIGHT", 4, 4)
+    F.close:SetScript("OnClick", function()
+        F:Hide()
+        ResurgenceDB.buffsHudOpen = false
+    end)
+
+    -- Subtitle
+    local sub = makeText(inner, "Active right now. Click [Track] to follow the in-game arrow.",
+        "GameFontDisableSmall", C.textMuted)
+    sub:SetPoint("TOPLEFT", 12, -44)
+
+    -- Drag the header to move
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function()
+        if not ResurgenceDB.buffsHudLocked then F:StartMoving() end
+    end)
+    header:SetScript("OnDragStop", function()
+        F:StopMovingOrSizing()
+        local p1, _, _, x, y = F:GetPoint()
+        ResurgenceDB.buffsHudPos = { p1, x, y }
+    end)
+
+    -- Build rows
+    local rowY = 64
+    local rowH = 56
+    state.buffsHUDRows = {}
+    for _, buff in ipairs(WORLD_BUFFS) do
+        local row = CreateFrame("Frame", nil, inner)
+        row:SetHeight(rowH)
+        row:SetPoint("TOPLEFT", 8, -rowY)
+        row:SetPoint("TOPRIGHT", -8, -rowY)
+
+        local rowBG = row:CreateTexture(nil, "BACKGROUND")
+        rowBG:SetAllPoints()
+        setBG(rowBG, C.panel)
+
+        -- Category/status accent on the left
+        local accent = row:CreateTexture(nil, "OVERLAY")
+        accent:SetWidth(2)
+        accent:SetPoint("TOPLEFT", 0, 0)
+        accent:SetPoint("BOTTOMLEFT", 0, 0)
+        setBG(accent, buff.waypoint and C.cyan or C.goldDim)
+
+        -- Spell icon
+        row.icon = row:CreateTexture(nil, "ARTWORK")
+        row.icon:SetSize(36, 36)
+        row.icon:SetPoint("LEFT", 8, 0)
+        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        row.icon:SetTexture(buff.icon or 134400)
+
+        -- Name
+        row.name = makeText(row, buff.name, "GameFontNormal", C.gold)
+        row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -2)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -78, 0)
+        row.name:SetJustifyH("LEFT")
+        row.name:SetWordWrap(false)
+
+        -- Countdown (live)
+        row.countdown = makeText(row, "", "GameFontHighlightSmall", C.cyan)
+        row.countdown:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -18)
+        row.countdown:SetJustifyH("LEFT")
+
+        -- Location text
+        row.location = makeText(row, buff.location or "", "GameFontDisableSmall", C.textMuted)
+        row.location:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -34)
+        row.location:SetPoint("RIGHT", row, "RIGHT", -78, 0)
+        row.location:SetJustifyH("LEFT")
+        row.location:SetWordWrap(false)
+
+        -- Track button
+        if buff.waypoint then
+            local btn = makeButton(row, "Track", 64, 24, C.cyan)
+            btn:SetPoint("RIGHT", -6, 0)
+            btn:SetScript("OnClick", function() trackWaypoint(buff) end)
+        else
+            local pill = makeText(row, "GLOBAL", "GameFontDisableSmall", C.textFaint)
+            pill:SetPoint("RIGHT", -10, 0)
+        end
+
+        row.buff = buff
+        table.insert(state.buffsHUDRows, row)
+        rowY = rowY + rowH + 4
+    end
+
+    -- Resize HUD to fit
+    inner:SetHeight(rowY + 8)
+    F:SetHeight(rowY + 12)
+
+    -- Footer signature
+    local footer = makeText(inner, "Resurgence  |cff707080·|r  v" .. ADDON_VERSION,
+        "GameFontDisableSmall", C.textFaint)
+    footer:SetPoint("BOTTOM", 0, 6)
+
+    -- Live countdown ticker (1s precision)
+    F._tickAcc = 0
+    F:SetScript("OnUpdate", function(self, elapsed)
+        self._tickAcc = self._tickAcc + elapsed
+        if self._tickAcc < 1.0 then return end
+        self._tickAcc = 0
+        local now = GetTime()
+        for _, row in ipairs(state.buffsHUDRows) do
+            local remaining = row.buff.endsAtAbsolute - now
+            row.countdown:SetText(formatCountdown(remaining))
+            if remaining <= 0 then
+                row.countdown:SetTextColor(rgb(C.textFaint))
+            elseif remaining < 3600 then
+                row.countdown:SetTextColor(rgb(C.gold))
+            else
+                row.countdown:SetTextColor(rgb(C.cyan))
+            end
+        end
+    end)
+
+    state.buffsHUD = F
+    return F
+end
+
+local function showBuffsHUD()
+    local F = buildBuffsHUD()
+    F:Show()
+    ResurgenceDB.buffsHudOpen = true
+end
+
+local function hideBuffsHUD()
+    if state.buffsHUD then state.buffsHUD:Hide() end
+    ResurgenceDB.buffsHudOpen = false
+end
+
+local function toggleBuffsHUD()
+    if state.buffsHUD and state.buffsHUD:IsShown() then
+        hideBuffsHUD()
+    else
+        showBuffsHUD()
+    end
 end
 
 ----------------------------------------------------------------------
@@ -574,10 +885,95 @@ local function buildSupportContent(parent)
 end
 
 ----------------------------------------------------------------------
+-- Tab content : World Buffs
+----------------------------------------------------------------------
+local function buildBuffsContent(parent)
+    local outer = makePanel(parent, { 0, 0, 0, 0 })
+    outer:SetAllPoints()
+
+    local header = makeText(outer, "World Buffs", "GameFontNormalHuge", C.gold)
+    header:SetPoint("TOPLEFT", 24, -20)
+
+    local sub = makeText(outer,
+        "Live countdowns for every active world event. Open the floating HUD to keep them on screen, or click any event below to track its location with the in-game arrow.",
+        "GameFontNormal", C.textMuted)
+    sub:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+    sub:SetWidth(620)
+    sub:SetJustifyH("LEFT")
+
+    -- Toggle HUD button
+    local btnHUD = makeButton(outer, "Open the HUD", 180, 30, C.cyan)
+    btnHUD:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -16)
+    btnHUD:SetScript("OnClick", function() toggleBuffsHUD() end)
+
+    local btnAllHidden = makeButton(outer, "Hide the HUD", 180, 30, C.gold)
+    btnAllHidden:SetPoint("LEFT", btnHUD, "RIGHT", 12, 0)
+    btnAllHidden:SetScript("OnClick", function() hideBuffsHUD() end)
+
+    -- Scroll area with full event list
+    local scroll = CreateFrame("ScrollFrame", nil, outer, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", btnHUD, "BOTTOMLEFT", 0, -20)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 12)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(640, 1)
+    scroll:SetScrollChild(content)
+
+    local y = 0
+    local rowH = 64
+    for _, buff in ipairs(WORLD_BUFFS) do
+        local card = makePanel(content, C.panel)
+        card:SetHeight(rowH)
+        card:SetPoint("TOPLEFT", 0, -y)
+        card:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+
+        local accent = card:CreateTexture(nil, "OVERLAY")
+        accent:SetWidth(3)
+        accent:SetPoint("TOPLEFT", 0, 0)
+        accent:SetPoint("BOTTOMLEFT", 0, 0)
+        setBG(accent, buff.waypoint and C.cyan or C.goldDim)
+
+        local icon = card:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(40, 40)
+        icon:SetPoint("LEFT", 10, 0)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexture(buff.icon or 134400)
+
+        local name = makeText(card, buff.name, "GameFontNormalLarge", C.gold)
+        name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, -2)
+
+        local desc = makeText(card, buff.desc or "", "GameFontHighlightSmall", C.text)
+        desc:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, -22)
+        desc:SetPoint("RIGHT", card, "RIGHT", -110, 0)
+        desc:SetJustifyH("LEFT")
+
+        local loc = makeText(card, buff.location or "", "GameFontDisableSmall", C.textMuted)
+        loc:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, -42)
+        loc:SetPoint("RIGHT", card, "RIGHT", -110, 0)
+        loc:SetJustifyH("LEFT")
+
+        if buff.waypoint then
+            local btn = makeButton(card, "Track", 90, 26, C.cyan)
+            btn:SetPoint("RIGHT", -10, 0)
+            btn:SetScript("OnClick", function() trackWaypoint(buff) end)
+        else
+            local pill = makeText(card, "GLOBAL", "GameFontNormalSmall", C.textFaint)
+            pill:SetPoint("RIGHT", -16, 0)
+        end
+
+        y = y + rowH + 6
+    end
+
+    content:SetHeight(y)
+    return outer
+end
+
+----------------------------------------------------------------------
 -- Tab dispatcher
 ----------------------------------------------------------------------
 local TAB_BUILDERS = {
     welcome  = buildWelcomeContent,
+    buffs    = buildBuffsContent,
     roadmap  = buildRoadmapContent,
     about    = buildAboutContent,
     settings = buildSettingsContent,
@@ -914,6 +1310,9 @@ handler:SetScript("OnEvent", function(_, event, name)
         end
     elseif event == "PLAYER_LOGIN" then
         buildLauncher()
+        if ResurgenceDB.buffsHudOpen then
+            C_Timer.After(0.5, function() showBuffsHUD() end)
+        end
         if not ResurgenceDB.welcomed then
             C_Timer.After(2.0, function()
                 ResurgenceUI_ShowWelcome()
@@ -960,6 +1359,14 @@ SlashCmdList["RESURGENCE"] = function(msg)
         ResurgenceUI_OpenTab("settings")
     elseif cmd == "support" then
         ResurgenceUI_OpenTab("support")
+    elseif cmd == "buffs" or cmd == "worldbuffs" then
+        if arg == "show" then
+            showBuffsHUD()
+        elseif arg == "hide" then
+            hideBuffsHUD()
+        else
+            toggleBuffsHUD()
+        end
     elseif cmd == "reset" then
         ResurgenceDB.launcherPos = { "RIGHT", -8, 80 }
         ResurgenceDB.windowPos   = { "CENTER", 0, 40 }
@@ -983,6 +1390,7 @@ SlashCmdList["RESURGENCE"] = function(msg)
         print("  |cff80c0ff/res about|r        open About tab")
         print("  |cff80c0ff/res settings|r     open Settings tab")
         print("  |cff80c0ff/res support|r      open Support / Links tab")
+        print("  |cff80c0ff/res buffs|r        toggle the floating World Buffs HUD")
         print("  |cff80c0ff/res reset|r        reset launcher and window positions")
     else
         print("|cffffd700[Resurgence]|r unknown. |cff80c0ff/res help|r for commands")
