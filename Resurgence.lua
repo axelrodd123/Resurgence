@@ -72,9 +72,9 @@ local ROADMAP = {
     {
         ver = "0.3.0", status = "planned",
         title = "Aura Engine",
-        body = "The reason this addon exists. Track the procs and buffs that matter, with the polish WeakAuras gave us before it broke in 12.0.x.",
+        body = "The core promise. Track the procs and buffs that actually matter to your spec, with the visual polish your gameplay deserves.",
         items = {
-            "28+ curated procs and buffs across 13 classes",
+            "Curated proc and buff library, hand-picked per spec",
             "Glow border, cooldown sweep, countdown numbers",
             "Per-aura toggle from Settings",
             "Drag-and-drop layout, position persisted",
@@ -82,18 +82,18 @@ local ROADMAP = {
     },
     {
         ver = "0.4.0", status = "planned",
-        title = "Party CDs Module",
-        body = "PartyCD becomes a Resurgence module. Track every group member's cooldowns from one unified config.",
+        title = "Group Awareness",
+        body = "Real-time visibility on the cooldowns of every player in your group, in one unified panel that respects your class roles.",
         items = {
-            "49 spells across all classes",
-            "Color-coded categories : defensive, interrupt, utility, combat res",
-            "Real-time tracking via UNIT_SPELLCAST_SUCCEEDED (12.0.x safe)",
+            "Defensive, interrupt, utility, combat res tracking",
+            "Color-coded by category, sized for raid view",
+            "Real-time updates via the safe player-cast API",
         },
     },
     {
         ver = "0.5.0", status = "planned",
-        title = "Combat Info",
-        body = "Lightweight Details replacement. Damage done, healing done, top spell, threat. Just enough to know what is happening.",
+        title = "Combat Insights",
+        body = "Live damage, healing, threat, and top-spell metrics that read at a glance. Built for the encounter, not the spreadsheet.",
         items = {
             "Per-fight DPS / HPS / damage taken",
             "Top spell breakdown",
@@ -230,19 +230,21 @@ local function buildLauncher()
     local p = ResurgenceDB.launcherPos or { "RIGHT", -8, 80 }
     L:SetPoint(p[1] or "RIGHT", UIParent, p[1] or "RIGHT", p[2] or -8, p[3] or 80)
 
-    -- Soft drop shadow
+    -- Soft drop shadow (icon source is already a circle with transparent corners,
+    -- so the shadow inherits the circular silhouette automatically).
     L.shadow = L:CreateTexture(nil, "BACKGROUND")
     L.shadow:SetTexture(LOGO_PATH)
     L.shadow:SetPoint("CENTER", 1, -1)
     L.shadow:SetSize(46, 46)
     L.shadow:SetVertexColor(0, 0, 0, 0.7)
 
-    -- Main icon
+    -- Main icon (the source PNG / TGA is a perfectly circular logo on
+    -- a transparent canvas, no mask needed).
     L.icon = L:CreateTexture(nil, "ARTWORK")
     L.icon:SetTexture(LOGO_PATH)
     L.icon:SetAllPoints()
 
-    -- Hover ring
+    -- Cyan hover ring (GoldRing texture is already round)
     L.ring = L:CreateTexture(nil, "OVERLAY")
     L.ring:SetTexture("Interface\\COMMON\\GoldRing")
     L.ring:SetPoint("TOPLEFT", -3, 3)
@@ -255,8 +257,8 @@ local function buildLauncher()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("|cffffd700Resurgence|r", 1, 1, 1)
         GameTooltip:AddLine("|cffaaaaaaLeft click|r  open the menu", 0.7, 0.85, 1)
-        GameTooltip:AddLine("|cffaaaaaaShift drag|r   move this button", 0.7, 0.85, 1)
-        GameTooltip:AddLine("|cffaaaaaaRight click|r  hide for this session", 0.7, 0.85, 1)
+        GameTooltip:AddLine("|cffaaaaaaDrag|r        move this button anywhere", 0.7, 0.85, 1)
+        GameTooltip:AddLine("|cffaaaaaaRight click|r hide for this session", 0.7, 0.85, 1)
         GameTooltip:Show()
     end)
     L:SetScript("OnLeave", function(self)
@@ -264,9 +266,10 @@ local function buildLauncher()
         GameTooltip:Hide()
     end)
 
-    L:SetScript("OnDragStart", function(self)
-        if IsShiftKeyDown() then self:StartMoving() end
-    end)
+    -- Plain drag (no shift modifier required). WoW's RegisterForDrag +
+    -- RegisterForClicks automatically distinguishes a drag from a click
+    -- based on whether the mouse moves between press and release.
+    L:SetScript("OnDragStart", function(self) self:StartMoving() end)
     L:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local p1, _, _, x, y = self:GetPoint()
@@ -306,7 +309,7 @@ local function buildWelcomeContent(parent)
 
     -- Subtitle
     p.subtitle = makeText(p,
-        "WeakAuras-style addons rebuilt for the 12.0.x Midnight era.",
+        "Premium awareness for the 12.0.x Midnight era.",
         "GameFontNormalLarge", C.cyan)
     p.subtitle:SetPoint("TOP", p.title, "BOTTOM", 0, -8)
 
@@ -326,8 +329,8 @@ local function buildWelcomeContent(parent)
     body:SetSpacing(6)
     body:SetText(
         "Hi. You just installed Resurgence.\n\n" ..
-        "While WeakAuras, OmniCD, Plater and Details were broken or stalled by Blizzard's tighter security in Midnight 12.0.x, this is a from-scratch rewrite that uses only the new safe APIs. No tainted combat log handlers. No protected hooks. Just the addons we used to love, working again.\n\n" ..
-        "This v0.2.0 ships the visual shell. The engine arrives in v0.3.0. Browse the |cff80c0ffRoadmap|r tab to see what's coming and when.")
+        "Resurgence is the modern, focused, ground-up toolkit for the 12.0.x era. Designed by players, built for players. Premium awareness of the procs, cooldowns, and combat moments that actually matter, with the polish you expect and none of the bloat you don't.\n\n" ..
+        "This first build is the visual shell. The engine arrives in v0.3.0. Browse the |cff80c0ffRoadmap|r tab to see what's coming and when.")
 
     -- CTA buttons
     local btnRoadmap = makeButton(p, "View Roadmap", 160, 32, C.cyan)
@@ -430,11 +433,10 @@ local function buildAboutContent(parent)
     body:SetJustifyH("LEFT")
     body:SetSpacing(6)
     body:SetText(
-        "WoW had a problem in 12.0.x : the addons that defined modern raiding all stopped working.\n\n" ..
-        "WeakAuras went silent. OmniCD got renamed and stayed half-broken. Plater lost its profile system. Details stopped showing useful information mid-fight. Altoholic never updated. The community got loud, the maintainers got quiet, and players returning to Midnight felt like the UI got worse.\n\n" ..
-        "Resurgence is the answer. Each module is a from-scratch rewrite that uses only the safe APIs. No |cff80c0ffCOMBAT_LOG_EVENT_UNFILTERED|r. No protected hooks. No |cff80c0ffhooksecurefunc|r on |cff80c0ffStaticPopup_Show|r. No stuff that triggers ADDON_ACTION_FORBIDDEN at engine level.\n\n" ..
-        "What you get is a small, focused, lightweight tool that does what the legacy giants used to do, designed by someone who actually plays the game and got tired of waiting for the maintainers to come back.\n\n" ..
-        "|cffd0d0d0Built with care. Released with a roadmap. Maintained with bots.|r")
+        "Midnight changed the rules. The new engine is stricter, the security model is tighter, and the API surface most veteran addons leaned on is gone.\n\n" ..
+        "Resurgence was designed for that world from day one. Every module is built on the new safe APIs. No |cff80c0ffCOMBAT_LOG_EVENT_UNFILTERED|r. No protected hooks. No engine-level taint. The kind of foundation you only get when you start fresh and listen to what the game is actually telling you.\n\n" ..
+        "What you get is a focused, premium toolkit that earns its place on your screen. Per-class curation. Real attention to typography and timing. A roadmap that ships rather than promises. A maintainer who actually plays the game.\n\n" ..
+        "|cffd0d0d0Built with care. Released with a roadmap. Maintained for keeps.|r")
 
     local sigLine = makeBorderLine(outer, C.goldDim, 1, "TOP", 24)
     sigLine:ClearAllPoints()
@@ -656,7 +658,7 @@ local function buildMainWindow()
     header.title:SetPoint("LEFT", header.logo, "RIGHT", 16, 4)
 
     header.subtitle = makeText(header,
-        "WeakAuras-style addons rebuilt for the 12.0.x era",
+        "Premium awareness for the 12.0.x era",
         "GameFontNormal", C.textMuted)
     header.subtitle:SetPoint("TOPLEFT", header.title, "BOTTOMLEFT", 0, -2)
 
@@ -822,7 +824,7 @@ local function buildWelcomePopup()
 
     -- Subtitle
     P.subtitle = makeText(inner,
-        "WeakAuras-style addons rebuilt for the 12.0.x era",
+        "Premium awareness for the 12.0.x era",
         "GameFontNormal", C.cyan)
     P.subtitle:SetPoint("TOP", P.title, "BOTTOM", 0, -4)
 

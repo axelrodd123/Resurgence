@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3-alpha
+- New logo : transparent-background circular asset, no mask texture required at runtime, sharper edges and smoother rim glow.
+- Removed the runtime alpha mask code now that the source is already a perfect circle.
+
+## 0.2.2-alpha
+- New : the launcher button is now a true circle (alpha mask applied to the icon and shadow)
+- New : drag the launcher with a normal click-and-drag, no modifier key required
+- Brand : copy revisited across the welcome screen, About tab, roadmap and tooltips. Resurgence stands on its own merits.
+
 ## 0.2.1-alpha
 - Fix : `attempt to index local 'p' (a nil value)` crash on first load when the saved variables file pre-dates the v0.2.0 schema. Defaults now applied in `ADDON_LOADED` (after SavedVariables are restored) instead of at file scope, plus defensive fallbacks in the launcher and main-window builders.
 - Updated logo : new render with tighter framing, more refined gold bezel, brighter cyan rim glow.
